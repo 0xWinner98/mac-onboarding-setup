@@ -52,12 +52,19 @@ ask_continue(){
   esac
 }
 
+# ---------- 环境检测（芯片 / macOS 版本）----------
+ARCH=$(uname -m)
+if [ "$ARCH" = "arm64" ]; then CHIP="Apple 芯片（M 系列）"; else CHIP="Intel 芯片"; fi
+MACOS_VER=$(sw_vers -productVersion 2>/dev/null)
+MACOS_MAJOR=$(printf '%s' "$MACOS_VER" | cut -d. -f1)
+
 # ---------- 状态记录 ----------
 INSTALLED=(); SKIPPED=(); FAILED=()
 
 # ---------- 检测清单 ----------
 detect(){
   hr; say "${BOLD}先看看你这台电脑现在的安装情况${RST}"; hr
+  say "  ${DIM}本机：$CHIP / macOS $MACOS_VER${RST}"
   has_cmd claude   && ok "Claude Code —— $(claude --version 2>/dev/null | head -1)"   || err "Claude Code —— 未安装"
   has_cmd codex    && ok "Codex —— $(codex --version 2>/dev/null | head -1)"          || err "Codex —— 未安装"
   has_cmd hermes   && ok "Hermes —— $(hermes --version 2>/dev/null | head -1)"        || err "Hermes —— 未安装"
@@ -70,16 +77,37 @@ detect(){
 
 # ---------- 各工具安装 ----------
 do_claude(){
-  step "Claude Code —— 大课主力 AI 助手"
+  step "Claude Code —— 大课主力 AI 助手（命令行）"
   if has_cmd claude; then ok "已安装：$(claude --version 2>/dev/null | head -1)"; SKIPPED+=("Claude Code"); return; fi
-  say "将运行官方安装脚本（native 二进制，不需要 Node）："
-  say "  ${DIM}curl -fsSL https://claude.ai/install.sh | bash${RST}"
-  ask_continue "现在安装 Claude Code？" || { SKIPPED+=("Claude Code"); return; }
-  if curl -fsSL https://claude.ai/install.sh | bash; then
-    ensure_local_bin
-    if has_cmd claude; then ok "Claude Code 安装成功：$(claude --version 2>/dev/null | head -1)"; INSTALLED+=("Claude Code")
-    else warn "装好了，但当前窗口还没刷新命令（结束后重开终端即可）"; INSTALLED+=("Claude Code（需重开终端）"); fi
-  else err "Claude Code 安装失败（多半是网络）。稍后重试，或把这段截图发小组长。"; FAILED+=("Claude Code"); fi
+  local old_sys=0
+  if [ -n "$MACOS_MAJOR" ] && [ "$MACOS_MAJOR" -lt 13 ]; then
+    old_sys=1
+    warn "你的 macOS 是 $MACOS_VER（偏旧）。最新版 Claude Code 需要 macOS 13+，硬装会崩溃。"
+    say "  ${DIM}不用升级系统——给你装能在你系统跑的兼容版（2.1.112）。${RST}"
+  fi
+  ask_continue "现在安装 Claude Code（命令行）？" || { SKIPPED+=("Claude Code"); return; }
+  say "${DIM}正在下载安装，可能 1-2 分钟，请耐心等、别关窗口……${RST}"
+  if [ "$old_sys" = 1 ]; then
+    curl -fsSL https://claude.ai/install.sh | bash -s 2.1.112 2>&1 | tee /tmp/cc_install.log
+  else
+    curl -fsSL https://claude.ai/install.sh | bash 2>&1 | tee /tmp/cc_install.log
+  fi
+  ensure_local_bin
+  if has_cmd claude; then
+    ok "Claude Code 安装成功：$(claude --version 2>/dev/null | head -1)"; INSTALLED+=("Claude Code")
+    if [ "$old_sys" = 1 ]; then
+      local rc="$HOME/.zshrc"; [ "$(basename "${SHELL:-/bin/zsh}")" = "bash" ] && rc="$HOME/.bash_profile"
+      grep -q "DISABLE_AUTOUPDATER" "$rc" 2>/dev/null || printf '\nexport DISABLE_AUTOUPDATER=1  # 航海家脚本：旧 macOS 防 Claude Code 自动更新到不兼容版\n' >> "$rc"
+      export DISABLE_AUTOUPDATER=1
+      say "${DIM}已帮你关掉自动更新（避免升到不兼容的新版）。以后想用新版，先把 macOS 升到 13+。${RST}"
+    fi
+  elif grep -q "_ubrk_clone\|Symbol not found\|Abort trap" /tmp/cc_install.log 2>/dev/null; then
+    err "Claude Code 和你的 macOS 版本不兼容（这不是网络问题）。"
+    say "  ${DIM}解决：重跑本脚本会自动装兼容旧版；想用新版要把 macOS 升到 13+；或直接用后面的 Claude 桌面客户端。${RST}"
+    FAILED+=("Claude Code（macOS 旧，建议用客户端或重跑装兼容版）")
+  else
+    warn "装完了但暂时没认到命令（结束后重开终端再试 claude --version）。"; INSTALLED+=("Claude Code（需重开终端确认）")
+  fi
 }
 
 do_codex(){
@@ -88,6 +116,7 @@ do_codex(){
   say "将运行官方安装脚本（不需要 Node）："
   say "  ${DIM}curl -fsSL https://chatgpt.com/codex/install.sh | sh${RST}"
   ask_continue "现在安装 Codex？" || { SKIPPED+=("Codex"); return; }
+  say "${DIM}正在下载安装，可能 1-2 分钟，请耐心等、别关窗口……${RST}"
   if curl -fsSL https://chatgpt.com/codex/install.sh | sh; then
     ensure_local_bin
     if has_cmd codex; then ok "Codex 安装成功：$(codex --version 2>/dev/null | head -1)"; INSTALLED+=("Codex")
@@ -106,6 +135,7 @@ do_hermes(){
   say "将运行官方安装脚本（仅需 Git，会自动装 Python / Node 等依赖，耗时几分钟）："
   say "  ${DIM}curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash${RST}"
   ask_continue "现在安装 Hermes？" || { SKIPPED+=("Hermes"); return; }
+  say "${DIM}正在下载安装（依赖较多，可能几分钟），请耐心等、别关窗口……${RST}"
   if curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash; then
     ensure_local_bin
     if has_cmd hermes; then ok "Hermes 安装成功：$(hermes --version 2>/dev/null | head -1)"; INSTALLED+=("Hermes")
@@ -215,6 +245,50 @@ auth_phase(){
   fi
 }
 
+# ---------- 图形界面：Claudian 插件 + 桌面客户端 ----------
+do_clients(){
+  step "图形界面：Claudian 插件 + 桌面客户端（按你的芯片）"
+
+  # ① Claudian 插件——所有芯片都能用：在 Obsidian 里图形化用 Codex / Claude Code
+  say "${BOLD}① 在 Obsidian 里装 Claudian 插件${RST}（强烈推荐，所有芯片 / 系统都能用）"
+  say "  它让你在 Obsidian 界面里直接用 Claude Code / Codex（侧边栏聊天、选中改写），${BOLD}体验很接近 Codex 桌面 app${RST}。"
+  say "  装法：打开 Obsidian → 设置 → 第三方插件（社区插件）→ 搜 ${BOLD}Claudian${RST} → 安装并启用 → 插件里选 Claude 或 Codex。"
+  has_cmd open && { ask_continue "现在打开 Obsidian 去装 Claudian？" && open -a Obsidian 2>/dev/null || true; }
+
+  # ② Claude 桌面客户端——Intel / M 都能装（macOS 11+）；Cowork 需 M 芯片
+  echo
+  if [ -d "/Applications/Claude.app" ]; then
+    ok "Claude 桌面客户端已安装"
+  else
+    local cw="Chat / Code"; [ "$ARCH" = "arm64" ] && cw="Chat / Code / Cowork"
+    say "${BOLD}② Claude 桌面客户端${RST}（$cw）"
+    if ask_continue "装 Claude 桌面客户端？"; then
+      say "${DIM}正在下载（约一两百 MB，稍等）……${RST}"
+      local tmp="/tmp/Claude-installer.dmg" vol
+      if curl -fsSL "https://claude.ai/api/desktop/darwin/universal/dmg/latest/redirect" -o "$tmp" 2>/dev/null && [ -s "$tmp" ]; then
+        vol=$(hdiutil attach "$tmp" -nobrowse 2>/dev/null | grep -o '/Volumes/[^ ]*' | head -1)
+        if [ -n "$vol" ] && ls "$vol"/*.app >/dev/null 2>&1; then
+          cp -R "$vol"/*.app /Applications/ 2>/dev/null && ok "Claude 客户端安装成功"
+          hdiutil detach "$vol" >/dev/null 2>&1
+        fi
+        [ -n "$vol" ] && hdiutil detach "$vol" >/dev/null 2>&1; rm -f "$tmp"
+      fi
+      [ -d "/Applications/Claude.app" ] || { warn "自动装没成功，手动下载："; say "  ${CYN}https://claude.com/download${RST}"; has_cmd open && open "https://claude.com/download" 2>/dev/null; }
+      [ "$ARCH" != "arm64" ] && say "${DIM}注：你是 Intel 芯片，客户端能用 Chat / Code；Cowork 需要 Apple 芯片。${RST}"
+    fi
+  fi
+
+  # ③ Codex 桌面 app——仅 Apple 芯片 + macOS 14+；否则提示用命令行 + Claudian
+  echo
+  if [ "$ARCH" = "arm64" ] && [ -n "$MACOS_MAJOR" ] && [ "$MACOS_MAJOR" -ge 14 ]; then
+    say "${BOLD}③ Codex 桌面 app${RST}（你的芯片 + 系统支持）"
+    ask_continue "打开 Codex app 下载页？（需 ChatGPT 账号，下载后拖进 Applications）" && { has_cmd open && open "https://developers.openai.com/codex/app" 2>/dev/null; }
+  else
+    warn "③ Codex 桌面 app 不支持你的电脑（需 Apple 芯片 + macOS 14+）。"
+    say "  没关系：${BOLD}命令行 Codex 已经能用${RST}；想要图形界面，就用上面的 ${BOLD}Claudian 插件${RST}——在 Obsidian 里图形化用 Codex，体验很接近 Codex 桌面 app。"
+  fi
+}
+
 # ---------- 小结 ----------
 summary(){
   hr; say "${BOLD}安装小结${RST}"; hr
@@ -259,6 +333,7 @@ main(){
   do_hermes
   do_larkcli
   do_obsidian
+  do_clients
   summary
 
   echo
