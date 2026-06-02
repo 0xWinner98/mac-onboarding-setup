@@ -119,7 +119,7 @@ do_claude(){
   if has_cmd claude; then ok "已安装：$(claude --version 2>/dev/null | head -1)"; SKIPPED+=("Claude Code"); return; fi
   if [ -n "$MACOS_MAJOR" ] && [ "$MACOS_MAJOR" -lt 13 ]; then
     warn "你的 macOS 是 $MACOS_VER（偏旧）。命令行 Claude Code 需要 macOS 13+，你的系统装不上（会崩 _ubrk_clone）。"
-    say "  ${DIM}两条路：① 能更新系统就升到 macOS 13+，命令行用最新版（也能体验最新 AI 功能）；② 不想更新，用 Claude 桌面客户端（后面会引导，M 芯片功能最全）。${RST}"
+    say "  ${DIM}两条路：1) 能更新系统就升到 macOS 13+，命令行用最新版（也能体验最新 AI 功能）；2) 不想更新，用 Claude 桌面客户端（后面会引导，M 芯片功能最全）。${RST}"
     SKIPPED+=("Claude Code 命令行（macOS 旧 → 用客户端 / 或升级系统）"); return
   fi
   ask_continue "现在安装 Claude Code（命令行）？" || { SKIPPED+=("Claude Code"); return; }
@@ -142,7 +142,7 @@ do_codex(){
   if has_cmd codex; then ok "已安装：$(codex --version 2>/dev/null | head -1)"; SKIPPED+=("Codex"); return; fi
   if [ -n "$MACOS_MAJOR" ] && [ "$MACOS_MAJOR" -lt 12 ]; then
     warn "你的 macOS 是 $MACOS_VER（<12）。命令行 Codex 官方要求 macOS 12+，装不了。"
-    say "  ${DIM}两条路：① 升级 macOS 到 12+；② 用 Codex 桌面 App（有 Apple / Intel 版，后面会引导）。${RST}"
+    say "  ${DIM}两条路：1) 升级 macOS 到 12+；2) 用 Codex 桌面 App（有 Apple / Intel 版，后面会引导）。${RST}"
     SKIPPED+=("Codex 命令行（macOS <12 → 用 Codex App / 或升级）"); return
   fi
   say "将运行官方安装脚本（不需要 Node）："
@@ -262,26 +262,26 @@ auth_phase(){
   say "${DIM}脚本不碰你的任何密码，所有登录都是你在官方页面自己完成。${RST}"
 
   if has_cmd codex; then
-    step "① 登录 Codex（用你的 ChatGPT 账号）"
+    step "1) 登录 Codex（用你的 ChatGPT 账号）"
     say "即将运行 ${DIM}codex login${RST}，会打开浏览器。"
     ask_continue "现在登录 Codex？" && { codex login </dev/tty || warn "登录没完成，稍后可手动运行 codex login"; }
   fi
 
   if has_cmd lark-cli; then
-    step "② 配置并授权 飞书 CLI"
+    step "2) 配置并授权 飞书 CLI"
     say "先初始化，再扫码 / 浏览器授权。"
     ask_continue "现在配置飞书 CLI？" && { lark-cli config init </dev/tty; lark-cli auth login </dev/tty || warn "授权没完成，稍后可手动运行 lark-cli auth login"; }
   fi
 
   if has_cmd hermes; then
-    step "③ Hermes —— 装好就行，先不用配"
+    step "3) Hermes —— 装好就行，先不用配"
     ok "Hermes 命令行已就绪（hermes --version 能看到版本就成）。"
     say "  ${DIM}今晚不用急着选模型 / 订阅——那一步等你了解后再弄，免得不懂时误操作。${RST}"
     say "  要用中转的话：和 Claude Code / Codex 一样，在 ${BOLD}CC Switch${RST} 里点右上角「新建」，新建一个 provider 填中转地址和密钥即可（不想敲命令行也能配 Hermes）。"
   fi
 
   if has_cmd claude; then
-    step "④ Claude Code 登录（重点）"
+    step "4) Claude Code 登录（重点）"
     say "你的 Claude Code 打算怎么用？"
     say "  ${BOLD}1${RST} = 官方订阅登录（你有 Claude Pro / Max 账号）"
     say "  ${BOLD}2${RST} = 用中转（怕封号 / 没官方订阅 / 网络进不去官方）"
@@ -303,19 +303,19 @@ auth_phase(){
 do_clients(){
   step "图形界面：Claudian 插件 + 桌面客户端（按你的芯片）"
 
-  # ① Claudian 插件——所有芯片都能用：在 Obsidian 里图形化用 Codex / Claude Code
-  say "${BOLD}① 在 Obsidian 里装 Claudian 插件${RST}（强烈推荐，所有芯片 / 系统都能用）"
+  # 1) Claudian 插件——所有芯片都能用：在 Obsidian 里图形化用 Codex / Claude Code
+  say "${BOLD}1) 在 Obsidian 里装 Claudian 插件${RST}（强烈推荐，所有芯片 / 系统都能用）"
   say "  它让你在 Obsidian 界面里直接用 Claude Code / Codex（侧边栏聊天、选中改写），${BOLD}体验很接近 Codex 桌面 app${RST}。"
   say "  装法：打开 Obsidian → 设置 → 第三方插件（社区插件）→ 搜 ${BOLD}Claudian${RST} → 安装并启用 → 插件里选 Claude 或 Codex。"
   has_cmd open && { ask_continue "现在打开 Obsidian 去装 Claudian？" && open -a Obsidian 2>/dev/null || true; }
 
-  # ② Claude 桌面客户端——官方只在网页下载（Intel / M 都能装，macOS 11+）；Cowork 需 M 芯片
+  # 2) Claude 桌面客户端——官方只在网页下载（Intel / M 都能装，macOS 11+）；Cowork 需 M 芯片
   echo
   if [ -d "/Applications/Claude.app" ]; then
     ok "Claude 桌面客户端已安装"
   else
     local cw="Chat / Code"; [ "$ARCH" = "arm64" ] && cw="Chat / Code / Cowork"
-    say "${BOLD}② Claude 桌面客户端${RST}（$cw）——官方只在网页下载"
+    say "${BOLD}2) Claude 桌面客户端${RST}（$cw）——官方只在网页下载"
     if ask_continue "打开 Claude 客户端下载页？（下载后把图标拖进 Applications）"; then
       has_cmd open && open "https://claude.com/download" 2>/dev/null
       say "  在打开的页面下载 macOS 版 → 双击 .dmg → 拖进 Applications。"
@@ -323,13 +323,13 @@ do_clients(){
     fi
   fi
 
-  # ③ Codex 桌面 App——Apple Silicon 和 Intel 都有官方版本
+  # 3) Codex 桌面 App——Apple Silicon 和 Intel 都有官方版本
   echo
   if [ -d "/Applications/Codex.app" ]; then
     ok "Codex 桌面 App 已安装"
   else
     local cxbuild="Apple Silicon 版"; [ "$ARCH" != "arm64" ] && cxbuild="Intel 版"
-    say "${BOLD}③ Codex 桌面 App${RST}（图形界面，Apple 芯片和 Intel 都有官方版本）"
+    say "${BOLD}3) Codex 桌面 App${RST}（图形界面，Apple 芯片和 Intel 都有官方版本）"
     say "  你的电脑是 $CHIP，到下载页选 ${BOLD}$cxbuild${RST}，下载后拖进 Applications。"
     ask_continue "打开 Codex App 下载页？（需 ChatGPT 账号）" && { has_cmd open && open "https://developers.openai.com/codex/app" 2>/dev/null; }
     say "  ${DIM}（不想装 App 也行：命令行 Codex 或 Obsidian 的 Claudian 插件一样能用 Codex）${RST}"
