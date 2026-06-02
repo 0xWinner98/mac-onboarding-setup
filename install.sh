@@ -138,8 +138,13 @@ do_claude(){
 }
 
 do_codex(){
-  step "Codex —— OpenAI 的 AI 终端"
+  step "Codex —— OpenAI 的 AI 终端（命令行）"
   if has_cmd codex; then ok "已安装：$(codex --version 2>/dev/null | head -1)"; SKIPPED+=("Codex"); return; fi
+  if [ -n "$MACOS_MAJOR" ] && [ "$MACOS_MAJOR" -lt 12 ]; then
+    warn "你的 macOS 是 $MACOS_VER（<12）。命令行 Codex 官方要求 macOS 12+，装不了。"
+    say "  ${DIM}两条路：① 升级 macOS 到 12+；② 用 Codex 桌面 App（有 Apple / Intel 版，后面会引导）。${RST}"
+    SKIPPED+=("Codex 命令行（macOS <12 → 用 Codex App / 或升级）"); return
+  fi
   say "将运行官方安装脚本（不需要 Node）："
   say "  ${DIM}curl -fsSL https://chatgpt.com/codex/install.sh | sh${RST}"
   ask_continue "现在安装 Codex？" || { SKIPPED+=("Codex"); return; }
