@@ -70,7 +70,7 @@ detect(){
 
 # ---------- 各工具安装 ----------
 do_claude(){
-  step "Claude Code —— 大课主力 AI 编程助手"
+  step "Claude Code —— 大课主力 AI 助手"
   if has_cmd claude; then ok "已安装：$(claude --version 2>/dev/null | head -1)"; SKIPPED+=("Claude Code"); return; fi
   say "将运行官方安装脚本（native 二进制，不需要 Node）："
   say "  ${DIM}curl -fsSL https://claude.ai/install.sh | bash${RST}"
@@ -83,7 +83,7 @@ do_claude(){
 }
 
 do_codex(){
-  step "Codex —— OpenAI 的 AI 编程终端"
+  step "Codex —— OpenAI 的 AI 终端"
   if has_cmd codex; then ok "已安装：$(codex --version 2>/dev/null | head -1)"; SKIPPED+=("Codex"); return; fi
   say "将运行官方安装脚本（不需要 Node）："
   say "  ${DIM}curl -fsSL https://chatgpt.com/codex/install.sh | sh${RST}"
@@ -139,13 +139,32 @@ do_larkcli(){
 }
 
 do_obsidian(){
-  step "Obsidian —— 你的 AI 第二大脑 / 知识库"
+  step "Obsidian —— 你的 AI 第二大脑 / 知识库（核心）"
   if [ -d "/Applications/Obsidian.app" ]; then ok "已安装 /Applications/Obsidian.app"; SKIPPED+=("Obsidian"); return; fi
-  warn "Obsidian 是图形软件，需手动下载："
-  say "  在打开的页面下载 macOS 版 → 双击 .dmg → 把 Obsidian 图标拖进 Applications 文件夹"
+  ask_continue "现在安装 Obsidian（核心知识库）？" || { SKIPPED+=("Obsidian"); return; }
+  # 优先 Homebrew cask（最简单）
+  if has_cmd brew && brew install --cask obsidian 2>/dev/null; then
+    ok "Obsidian 安装成功（Homebrew）"; INSTALLED+=("Obsidian"); return
+  fi
+  # 无 brew 或失败：下载官方 universal dmg 自动安装
+  say "下载 Obsidian 安装包（约几十 MB，稍等）..."
+  local url tmp vol
+  url=$(curl -fsSL https://api.github.com/repos/obsidianmd/obsidian-releases/releases/latest 2>/dev/null | grep -o 'https://[^"]*universal\.dmg' | head -1)
+  tmp="/tmp/Obsidian-installer.dmg"
+  if [ -n "$url" ] && curl -fsSL "$url" -o "$tmp" 2>/dev/null; then
+    vol=$(hdiutil attach "$tmp" -nobrowse 2>/dev/null | grep -o '/Volumes/[^ ]*' | head -1)
+    if [ -n "$vol" ] && [ -d "$vol/Obsidian.app" ]; then
+      cp -R "$vol/Obsidian.app" /Applications/ 2>/dev/null && { ok "Obsidian 安装成功"; INSTALLED+=("Obsidian"); }
+      hdiutil detach "$vol" >/dev/null 2>&1; rm -f "$tmp"
+      [ -d /Applications/Obsidian.app ] && return
+    fi
+    [ -n "$vol" ] && hdiutil detach "$vol" >/dev/null 2>&1; rm -f "$tmp"
+  fi
+  # 兜底：手动下载页
+  warn "自动安装没成功（多半网络），请手动下载：双击 .dmg 把图标拖进 Applications"
   say "  ${CYN}https://obsidian.md/download${RST}"
-  has_cmd open && { ask_continue "现在打开 Obsidian 下载页？" && open "https://obsidian.md/download" || true; }
-  SKIPPED+=("Obsidian（请按页面提示手动装）")
+  has_cmd open && open "https://obsidian.md/download" 2>/dev/null
+  FAILED+=("Obsidian（请手动装）")
 }
 
 # ---------- 授权 / 登录 ----------
@@ -181,7 +200,7 @@ auth_phase(){
     local ccmode; IFS= read -r ccmode </dev/tty || ccmode="1"
     if [ "$ccmode" = "2" ]; then
       say ""
-      warn "中转方案：装 ${BOLD}CC Switch${RST}（一个管理中转的小软件，Claude Code / Codex / Hermes 都能在里面切）"
+      warn "中转方案：装 ${BOLD}CC Switch${RST}（一个管理中转的小软件，Claude Code / Codex 的中转都能在里面切；Hermes 不走这里）"
       say "三步搞定："
       say "  ${BOLD}1)${RST} 在打开的页面下载 macOS 版 CC Switch（.dmg），拖进 Applications"
       say "  ${BOLD}2)${RST} 打开 CC Switch → 添加供应商 → 填入${BOLD}小组长发给你的中转地址和密钥${RST}"
