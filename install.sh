@@ -198,6 +198,15 @@ do_obsidian(){
   FAILED+=("Obsidian（请手动装）")
 }
 
+# ---------- CC Switch（中转管理，仅在用户选「中转」时调用）----------
+install_ccswitch(){
+  if [ -d "/Applications/CC Switch.app" ] || [ -d "/Applications/cc-switch.app" ]; then ok "CC Switch 已安装"; return; fi
+  say "${BOLD}装 CC Switch${RST}（管理中转的小软件，Claude Code / Codex 的中转都在它里面切；Hermes 不走这里）"
+  say "  在打开的页面下载 macOS 版（.dmg）→ 双击 → 把图标拖进 Applications："
+  say "  ${CYN}https://github.com/farion1231/cc-switch/releases/latest${RST}"
+  has_cmd open && open "https://github.com/farion1231/cc-switch/releases/latest" 2>/dev/null
+}
+
 # ---------- 授权 / 登录 ----------
 auth_phase(){
   hr; say "${BOLD}第二步：一个个带你登录 / 授权${RST}"; hr
@@ -231,14 +240,9 @@ auth_phase(){
     local ccmode; IFS= read -r ccmode </dev/tty || ccmode="1"
     if [ "$ccmode" = "2" ]; then
       say ""
-      warn "中转方案：装 ${BOLD}CC Switch${RST}（一个管理中转的小软件，Claude Code / Codex 的中转都能在里面切；Hermes 不走这里）"
-      say "三步搞定："
-      say "  ${BOLD}1)${RST} 在打开的页面下载 macOS 版 CC Switch（.dmg），拖进 Applications"
-      say "  ${BOLD}2)${RST} 打开 CC Switch → 添加供应商 → 填入${BOLD}小组长发给你的中转地址和密钥${RST}"
-      say "  ${BOLD}3)${RST} 选中它 → 应用，之后 Claude Code 直接可用"
-      say "  下载页：${CYN}https://github.com/farion1231/cc-switch/releases/latest${RST}"
-      has_cmd open && { ask_continue "现在打开 CC Switch 下载页？" && open "https://github.com/farion1231/cc-switch/releases/latest" || true; }
-      say "${DIM}（中转地址和密钥找小组长拿；脚本里不预置，避免泄露和封号）${RST}"
+      install_ccswitch
+      say "  ${BOLD}装好后配置${RST}：打开 CC Switch → 添加供应商 → 填${BOLD}小组长发的中转地址和密钥${RST} → 选中 → 应用，之后 Claude Code / Codex 都能用中转。"
+      say "${DIM}（中转地址和密钥找小组长拿；脚本不预置，避免泄露和封号）${RST}"
     else
       say "即将运行 ${DIM}claude${RST}，会打开浏览器走官方登录；登录后在里面输入 /exit 退出。"
       ask_continue "现在登录 Claude Code 官方？" && { claude </dev/tty || warn "登录没完成，稍后可手动运行 claude"; }
