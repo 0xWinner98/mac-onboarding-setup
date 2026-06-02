@@ -255,25 +255,16 @@ do_clients(){
   say "  装法：打开 Obsidian → 设置 → 第三方插件（社区插件）→ 搜 ${BOLD}Claudian${RST} → 安装并启用 → 插件里选 Claude 或 Codex。"
   has_cmd open && { ask_continue "现在打开 Obsidian 去装 Claudian？" && open -a Obsidian 2>/dev/null || true; }
 
-  # ② Claude 桌面客户端——Intel / M 都能装（macOS 11+）；Cowork 需 M 芯片
+  # ② Claude 桌面客户端——官方只在网页下载（Intel / M 都能装，macOS 11+）；Cowork 需 M 芯片
   echo
   if [ -d "/Applications/Claude.app" ]; then
     ok "Claude 桌面客户端已安装"
   else
     local cw="Chat / Code"; [ "$ARCH" = "arm64" ] && cw="Chat / Code / Cowork"
-    say "${BOLD}② Claude 桌面客户端${RST}（$cw）"
-    if ask_continue "装 Claude 桌面客户端？"; then
-      say "${DIM}正在下载（约一两百 MB，稍等）……${RST}"
-      local tmp="/tmp/Claude-installer.dmg" vol
-      if curl -fsSL "https://claude.ai/api/desktop/darwin/universal/dmg/latest/redirect" -o "$tmp" 2>/dev/null && [ -s "$tmp" ]; then
-        vol=$(hdiutil attach "$tmp" -nobrowse 2>/dev/null | grep -o '/Volumes/[^ ]*' | head -1)
-        if [ -n "$vol" ] && ls "$vol"/*.app >/dev/null 2>&1; then
-          cp -R "$vol"/*.app /Applications/ 2>/dev/null && ok "Claude 客户端安装成功"
-          hdiutil detach "$vol" >/dev/null 2>&1
-        fi
-        [ -n "$vol" ] && hdiutil detach "$vol" >/dev/null 2>&1; rm -f "$tmp"
-      fi
-      [ -d "/Applications/Claude.app" ] || { warn "自动装没成功，手动下载："; say "  ${CYN}https://claude.com/download${RST}"; has_cmd open && open "https://claude.com/download" 2>/dev/null; }
+    say "${BOLD}② Claude 桌面客户端${RST}（$cw）——官方只在网页下载"
+    if ask_continue "打开 Claude 客户端下载页？（下载后把图标拖进 Applications）"; then
+      has_cmd open && open "https://claude.com/download" 2>/dev/null
+      say "  在打开的页面下载 macOS 版 → 双击 .dmg → 拖进 Applications。"
       [ "$ARCH" != "arm64" ] && say "${DIM}注：你是 Intel 芯片，客户端能用 Chat / Code；Cowork 需要 Apple 芯片。${RST}"
     fi
   fi
