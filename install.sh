@@ -136,7 +136,8 @@ do_hermes(){
   say "将运行官方安装脚本（仅需 Git，会自动装 Python / Node 等依赖，耗时几分钟）："
   say "  ${DIM}curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash${RST}"
   ask_continue "现在安装 Hermes？" || { SKIPPED+=("Hermes"); return; }
-  say "${DIM}正在下载安装（依赖较多，可能几分钟），请耐心等、别关窗口……${RST}"
+  say "${DIM}正在装 Hermes：要下 200+ 个 Python 包，首次 5-15 分钟。${RST}"
+  say "${DIM}中途看到「Trying tier: all」「Resolved N packages」「uv.lock sync failed, falling back」都正常（它在从 PyPI 下载），这步可能半天没进度条——别以为卡住、别关窗口。${RST}"
   if curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash; then
     ensure_local_bin
     if has_cmd hermes; then ok "Hermes 安装成功：$(hermes --version 2>/dev/null | head -1)"; INSTALLED+=("Hermes")
