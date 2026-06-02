@@ -89,12 +89,12 @@ detect(){
   say "${BOLD}  ▸ 桌面 App / 知识库${RST}"
   [ -d /Applications/Obsidian.app ] && ok "Obsidian —— 已装" || err "Obsidian —— 未装"
   [ -d "/Applications/Claude.app" ] && ok "Claude 桌面 App —— 已装" || say "  ◦ Claude 桌面 App —— 未装（可选，图形界面）"
-  ls -d /Applications/Codex*.app >/dev/null 2>&1 && ok "Codex 桌面 App —— 已装" || say "  ◦ Codex 桌面 App —— 未装（可选，需 Apple 芯片 + macOS 14+）"
+  ls -d /Applications/Codex*.app >/dev/null 2>&1 && ok "Codex 桌面 App —— 已装" || say "  ◦ Codex 桌面 App —— 未装（可选，Apple 芯片 / Intel 都有官方版本）"
   if [ -n "$MACOS_MAJOR" ] && [ "$MACOS_MAJOR" -lt 13 ]; then
     warn "你的 macOS 偏旧（<13）：命令行 Claude Code 装不了，会引导你改用 Claude 桌面 App。"
   fi
-  if [ "$ARCH" != "arm64" ] || { [ -n "$MACOS_MAJOR" ] && [ "$MACOS_MAJOR" -lt 14 ]; }; then
-    say "${DIM}  注：Codex 桌面 App 需要 Apple 芯片 + macOS 14+，你的电脑不支持——用命令行 Codex（CLI）或 Obsidian 的 Claudian 插件即可。${RST}"
+  if [ -n "$MACOS_MAJOR" ] && [ "$MACOS_MAJOR" -lt 12 ]; then
+    warn "你的 macOS <12：命令行 Codex 可能装不了（官方要 12+）——可改用 Codex 桌面 App（Apple / Intel 都有版本）或 Obsidian 的 Claudian 插件。"
   fi
   say "${DIM}  ── 下面是依赖，不用单独管 ──${RST}"
   has_cmd node && ok "Node.js —— $(node -v)" || warn "Node.js —— 没有（装飞书 CLI 时自动装）"
@@ -318,14 +318,16 @@ do_clients(){
     fi
   fi
 
-  # ③ Codex 桌面 app——仅 Apple 芯片 + macOS 14+；否则提示用命令行 + Claudian
+  # ③ Codex 桌面 App——Apple Silicon 和 Intel 都有官方版本
   echo
-  if [ "$ARCH" = "arm64" ] && [ -n "$MACOS_MAJOR" ] && [ "$MACOS_MAJOR" -ge 14 ]; then
-    say "${BOLD}③ Codex 桌面 app${RST}（你的芯片 + 系统支持）"
-    ask_continue "打开 Codex app 下载页？（需 ChatGPT 账号，下载后拖进 Applications）" && { has_cmd open && open "https://developers.openai.com/codex/app" 2>/dev/null; }
+  if [ -d "/Applications/Codex.app" ]; then
+    ok "Codex 桌面 App 已安装"
   else
-    warn "③ Codex 桌面 app 不支持你的电脑（需 Apple 芯片 + macOS 14+）。"
-    say "  没关系：${BOLD}命令行 Codex 已经能用${RST}；想要图形界面，就用上面的 ${BOLD}Claudian 插件${RST}——在 Obsidian 里图形化用 Codex，体验很接近 Codex 桌面 app。"
+    local cxbuild="Apple Silicon 版"; [ "$ARCH" != "arm64" ] && cxbuild="Intel 版"
+    say "${BOLD}③ Codex 桌面 App${RST}（图形界面，Apple 芯片和 Intel 都有官方版本）"
+    say "  你的电脑是 $CHIP，到下载页选 ${BOLD}$cxbuild${RST}，下载后拖进 Applications。"
+    ask_continue "打开 Codex App 下载页？（需 ChatGPT 账号）" && { has_cmd open && open "https://developers.openai.com/codex/app" 2>/dev/null; }
+    say "  ${DIM}（不想装 App 也行：命令行 Codex 或 Obsidian 的 Claudian 插件一样能用 Codex）${RST}"
   fi
 }
 
