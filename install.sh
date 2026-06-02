@@ -130,8 +130,8 @@ do_claude(){
     ok "Claude Code 安装成功：$(claude --version 2>/dev/null | head -1)"; INSTALLED+=("Claude Code")
   elif grep -q "_ubrk_clone\|Symbol not found\|Abort trap" /tmp/cc_install.log 2>/dev/null; then
     err "Claude Code 和你的 macOS 版本不兼容（这不是网络问题）。"
-    say "  ${DIM}解决：重跑本脚本会自动装兼容旧版；想用新版要把 macOS 升到 13+；或直接用后面的 Claude 桌面客户端。${RST}"
-    FAILED+=("Claude Code（macOS 旧，建议用客户端或重跑装兼容版）")
+    say "  ${DIM}解决：把 macOS 升到 13+ 再用命令行；或不升级、直接用后面引导的 Claude 桌面客户端（M 芯片功能最全）。${RST}"
+    FAILED+=("Claude Code（macOS 旧 → 用桌面客户端 / 或升级到 13+）")
   else
     warn "装完了但暂时没认到命令（结束后重开终端再试 claude --version）。"; INSTALLED+=("Claude Code（需重开终端确认）")
   fi
