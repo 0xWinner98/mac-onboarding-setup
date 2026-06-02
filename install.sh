@@ -75,32 +75,33 @@ detect(){
   has_cmd git  && ok "Git —— 已就绪"         || warn "Git —— 没有（装 Hermes 时会提示安装）"
 }
 
+# ---------- 工作区（知识库文件夹）----------
+setup_workspace(){
+  step "先建一个工作区（你的知识库文件夹）"
+  say "在「文稿 Documents」下建个文件夹放知识库 + AI 工作区，名字自己起；以后 Obsidian 和 AI 都在这里干活。"
+  printf "${CYN}起个名字（直接回车用默认 Workspace）：${RST} "
+  local name; IFS= read -r name </dev/tty || name=""
+  [ -z "$name" ] && name="Workspace"
+  WORKSPACE="$HOME/Documents/$name"
+  mkdir -p "$WORKSPACE" 2>/dev/null && cd "$WORKSPACE" 2>/dev/null
+  ok "工作区：$WORKSPACE（已进入，后面装的工具都以这里为工作目录）"
+}
+
 # ---------- 各工具安装 ----------
 do_claude(){
   step "Claude Code —— 大课主力 AI 助手（命令行）"
   if has_cmd claude; then ok "已安装：$(claude --version 2>/dev/null | head -1)"; SKIPPED+=("Claude Code"); return; fi
-  local old_sys=0
   if [ -n "$MACOS_MAJOR" ] && [ "$MACOS_MAJOR" -lt 13 ]; then
-    old_sys=1
-    warn "你的 macOS 是 $MACOS_VER（偏旧）。最新版 Claude Code 需要 macOS 13+，硬装会崩溃。"
-    say "  ${DIM}不用升级系统——给你装能在你系统跑的兼容版（2.1.112）。${RST}"
+    warn "你的 macOS 是 $MACOS_VER（偏旧）。命令行 Claude Code 需要 macOS 13+，你的系统装不上（会崩 _ubrk_clone）。"
+    say "  ${DIM}两条路：① 能更新系统就升到 macOS 13+，命令行用最新版（也能体验最新 AI 功能）；② 不想更新，用 Claude 桌面客户端（后面会引导，M 芯片功能最全）。${RST}"
+    SKIPPED+=("Claude Code 命令行（macOS 旧 → 用客户端 / 或升级系统）"); return
   fi
   ask_continue "现在安装 Claude Code（命令行）？" || { SKIPPED+=("Claude Code"); return; }
   say "${DIM}正在下载安装，可能 1-2 分钟，请耐心等、别关窗口……${RST}"
-  if [ "$old_sys" = 1 ]; then
-    curl -fsSL https://claude.ai/install.sh | bash -s 2.1.112 2>&1 | tee /tmp/cc_install.log
-  else
-    curl -fsSL https://claude.ai/install.sh | bash 2>&1 | tee /tmp/cc_install.log
-  fi
+  curl -fsSL https://claude.ai/install.sh | bash 2>&1 | tee /tmp/cc_install.log
   ensure_local_bin
   if has_cmd claude; then
     ok "Claude Code 安装成功：$(claude --version 2>/dev/null | head -1)"; INSTALLED+=("Claude Code")
-    if [ "$old_sys" = 1 ]; then
-      local rc="$HOME/.zshrc"; [ "$(basename "${SHELL:-/bin/zsh}")" = "bash" ] && rc="$HOME/.bash_profile"
-      grep -q "DISABLE_AUTOUPDATER" "$rc" 2>/dev/null || printf '\nexport DISABLE_AUTOUPDATER=1  # 航海家脚本：旧 macOS 防 Claude Code 自动更新到不兼容版\n' >> "$rc"
-      export DISABLE_AUTOUPDATER=1
-      say "${DIM}已帮你关掉自动更新（避免升到不兼容的新版）。以后想用新版，先把 macOS 升到 13+。${RST}"
-    fi
   elif grep -q "_ubrk_clone\|Symbol not found\|Abort trap" /tmp/cc_install.log 2>/dev/null; then
     err "Claude Code 和你的 macOS 版本不兼容（这不是网络问题）。"
     say "  ${DIM}解决：重跑本脚本会自动装兼容旧版；想用新版要把 macOS 升到 13+；或直接用后面的 Claude 桌面客户端。${RST}"
@@ -319,6 +320,7 @@ main(){
   hr; say "${BOLD}第一步：逐个检查并安装${RST}"; hr
   ask_continue "开始安装流程？" || { say "好的，下次再来。已装好的不会重复装。"; exit 0; }
 
+  setup_workspace
   do_claude
   do_codex
   do_hermes
