@@ -6,7 +6,7 @@
 #   安装：CLI 走各家官方 PowerShell 安装器；依赖/桌面 App 走 winget；脚本内不含任何密钥
 #
 #   用法（在 PowerShell 里粘贴这一行；确保中文不乱码）：
-#     $u='https://raw.githubusercontent.com/0xWinner98/mac-onboarding-setup/main/install.ps1';$c=New-Object Net.WebClient;$c.Encoding=[Text.Encoding]::UTF8;iex $c.DownloadString($u)
+#     irm https://raw.githubusercontent.com/0xWinner98/mac-onboarding-setup/main/go.ps1 | iex
 #   只检测不安装：先 $env:CHECK_ONLY=1; 再跑上面那行
 # ============================================================
 
