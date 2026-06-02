@@ -248,11 +248,42 @@ do_obsidian(){
 
 # ---------- CC Switch（中转管理，仅在用户选「中转」时调用）----------
 install_ccswitch(){
-  if [ -d "/Applications/CC Switch.app" ] || [ -d "/Applications/cc-switch.app" ]; then ok "CC Switch 已安装"; return; fi
-  say "${BOLD}装 CC Switch${RST}（管理中转的小软件，Claude Code / Codex / Hermes 的中转都能在它里面切）"
-  say "  在打开的页面下载 macOS 版（.dmg）→ 双击 → 把图标拖进 Applications："
-  say "  ${CYN}https://github.com/farion1231/cc-switch/releases/latest${RST}"
-  has_cmd open && open "https://github.com/farion1231/cc-switch/releases/latest" 2>/dev/null
+  if [ -d "/Applications/CC Switch.app" ] || [ -d "/Applications/cc-switch.app" ]; then
+    ok "CC Switch 已安装"; open -a "CC Switch" 2>/dev/null || open -a "cc-switch" 2>/dev/null; return
+  fi
+  say "${BOLD}帮你自动下载安装 CC Switch${RST}（一键管理中转，Claude Code / Codex / Hermes 的中转都在它里面配）"
+  local api url tmp vol app
+  api=$(curl -fsSL https://api.github.com/repos/farion1231/cc-switch/releases/latest 2>/dev/null)
+  if [ "$ARCH" = "arm64" ]; then
+    url=$(printf '%s' "$api" | grep -o 'https://[^"]*\.dmg' | grep -iE 'aarch64|arm64' | head -1)
+  else
+    url=$(printf '%s' "$api" | grep -o 'https://[^"]*\.dmg' | grep -iE 'x64|x86_64|intel' | head -1)
+  fi
+  [ -z "$url" ] && url=$(printf '%s' "$api" | grep -o 'https://[^"]*\.dmg' | head -1)
+  tmp="/tmp/CCSwitch-installer.dmg"
+  if [ -n "$url" ]; then
+    say "${DIM}正在下载 CC Switch（官方 GitHub 版，几十 MB）……${RST}"
+    if curl -fsSL "$url" -o "$tmp" 2>/dev/null && [ -s "$tmp" ]; then
+      vol=$(hdiutil attach "$tmp" -nobrowse 2>/dev/null | grep -o '/Volumes/[^ ]*' | head -1)
+      app=$(ls -d "$vol"/*.app 2>/dev/null | head -1)
+      [ -n "$app" ] && cp -R "$app" /Applications/ 2>/dev/null && ok "CC Switch 安装成功"
+      [ -n "$vol" ] && hdiutil detach "$vol" >/dev/null 2>&1
+      rm -f "$tmp"
+    fi
+  fi
+  if [ -d "/Applications/CC Switch.app" ] || [ -d "/Applications/cc-switch.app" ]; then
+    # 清隔离属性，尽量让首次打开不被拦
+    xattr -dr com.apple.quarantine "/Applications/CC Switch.app" 2>/dev/null
+    xattr -dr com.apple.quarantine "/Applications/cc-switch.app" 2>/dev/null
+    say "  ${YLW}重要 —— 第一次打开如果弹「无法验证开发者」别慌${RST}：这是 macOS 对所有网上下载软件的默认拦截，不是病毒。"
+    say "  ${BOLD}解决（点一下就行）${RST}：到「${BOLD}系统设置 → 隐私与安全性${RST}」，往下翻到「已阻止 CC Switch」那行，点右边「${BOLD}仍要打开${RST}」→ 再确认一次「打开」即可。"
+    say "  ${DIM}正在帮你打开 CC Switch……${RST}"
+    open -a "CC Switch" 2>/dev/null || open -a "cc-switch" 2>/dev/null
+  else
+    warn "自动安装没成功（多半网络），帮你打开下载页手动装（下载 .dmg → 双击 → 把图标拖进 Applications）："
+    say "  ${CYN}https://github.com/farion1231/cc-switch/releases/latest${RST}"
+    has_cmd open && open "https://github.com/farion1231/cc-switch/releases/latest" 2>/dev/null
+  fi
 }
 
 # ---------- 授权 / 登录 ----------
@@ -282,16 +313,34 @@ auth_phase(){
 
   if has_cmd claude; then
     step "4) Claude Code 登录（重点）"
-    say "你的 Claude Code 打算怎么用？"
-    say "  ${BOLD}1${RST} = 官方订阅登录（你有 Claude Pro / Max 账号）"
-    say "  ${BOLD}2${RST} = 用中转（怕封号 / 没官方订阅 / 网络进不去官方）"
-    printf "${CYN}输入 1 或 2，回车确认：${RST} "
-    local ccmode; IFS= read -r ccmode </dev/tty || ccmode="1"
-    if [ "$ccmode" = "2" ]; then
-      say ""
+    say "Claude Code 登录是最容易卡住的一步。先问你三个问题，帮你选对路、少走弯路。"
+    echo
+    say "${BOLD}问题 1：你有官方付费账号吗？${RST}（Claude Pro / Max；ChatGPT 账号用来登 Codex）"
+    say "  ${DIM}为什么问：没有官方账号就没法走官方登录，只能用第三方中转。${RST}"
+    say "    1 = 有        2 = 没有"
+    printf "${CYN}输入 1 或 2：${RST} "; local q1; IFS= read -r q1 </dev/tty || q1="1"
+    echo
+    say "${BOLD}问题 2：这个账号被封过、或你担心被封吗？${RST}"
+    say "  ${DIM}为什么问：账号被封过的话，再用官方登录很容易又被封；很多同学会改用中转更稳妥。${RST}"
+    say "    1 = 没事 / 不担心      2 = 被封过 / 担心"
+    printf "${CYN}输入 1 或 2：${RST} "; local q2; IFS= read -r q2 </dev/tty || q2="1"
+    echo
+    local suggest="官方账号登录"
+    if [ "$q1" = "2" ] || [ "$q2" = "2" ]; then suggest="第三方中转"; fi
+    say "  ${DIM}根据你的回答，建议你用：${RST}${BOLD}$suggest${RST}"
+    [ "$q1" = "2" ] && say "  ${DIM}（你没有官方账号，官方登录走不通，所以建议中转）${RST}"
+    [ "$q1" != "2" ] && [ "$q2" = "2" ] && say "  ${DIM}（账号被封过 / 担心被封，用中转不拿正式账号冒险）${RST}"
+    echo
+    say "${BOLD}问题 3：那这次你用哪种？${RST}"
+    say "    1 = 官方账号直接登录"
+    say "    2 = 用第三方中转（${BOLD}CC Switch 一键配置${RST}，不怕封）"
+    printf "${CYN}输入 1 或 2：${RST} "; local q3; IFS= read -r q3 </dev/tty || q3="1"
+    echo
+    if [ "$q3" = "2" ]; then
+      say "好的，用${BOLD}第三方中转${RST} —— ${BOLD}CC Switch 一键配置${RST}。下面帮你自动下载官方版本并安装："
       install_ccswitch
-      say "  ${BOLD}装好后配置${RST}：打开 CC Switch → 添加供应商 → 填${BOLD}小组长发的中转地址和密钥${RST} → 选中 → 应用，之后 Claude Code / Codex / Hermes 都能用中转。"
-      say "${DIM}（中转地址和密钥找小组长拿；脚本不预置，避免泄露和封号）${RST}"
+      say "  ${BOLD}配置（在打开的 CC Switch 里）${RST}：点右上角「${BOLD}新建${RST}」→ 填${BOLD}小组长发的中转地址和密钥${RST} → 选中 → 应用。"
+      say "  ${DIM}配好后 Claude Code / Codex / Hermes 都走这个中转。地址和密钥找小组长拿，脚本不预置（避免泄露和封号）。${RST}"
     else
       say "即将运行 ${DIM}claude${RST}，会打开浏览器走官方登录；登录后在里面输入 /exit 退出。"
       ask_continue "现在登录 Claude Code 官方？" && { claude </dev/tty || warn "登录没完成，稍后可手动运行 claude"; }
@@ -309,17 +358,15 @@ do_clients(){
   say "  装法：打开 Obsidian → 设置 → 第三方插件（社区插件）→ 搜 ${BOLD}Claudian${RST} → 安装并启用 → 插件里选 Claude 或 Codex。"
   has_cmd open && { ask_continue "现在打开 Obsidian 去装 Claudian？" && open -a Obsidian 2>/dev/null || true; }
 
-  # 2) Claude 桌面客户端——官方只在网页下载（Intel / M 都能装，macOS 11+）；Cowork 需 M 芯片
+  # 2) Claude 桌面客户端——官方只在网页下载（Intel / Apple 芯片都能装，macOS 11+）
   echo
   if [ -d "/Applications/Claude.app" ]; then
     ok "Claude 桌面客户端已安装"
   else
-    local cw="Chat / Code"; [ "$ARCH" = "arm64" ] && cw="Chat / Code / Cowork"
-    say "${BOLD}2) Claude 桌面客户端${RST}（$cw）——官方只在网页下载"
+    say "${BOLD}2) Claude 桌面客户端${RST}（图形界面，Intel / Apple 芯片都能装）——官方只在网页下载"
     if ask_continue "打开 Claude 客户端下载页？（下载后把图标拖进 Applications）"; then
       has_cmd open && open "https://claude.com/download" 2>/dev/null
       say "  在打开的页面下载 macOS 版 → 双击 .dmg → 拖进 Applications。"
-      [ "$ARCH" != "arm64" ] && say "${DIM}注：你是 Intel 芯片，客户端能用 Chat / Code；Cowork 需要 Apple 芯片。${RST}"
     fi
   fi
 
