@@ -62,9 +62,11 @@ function Ensure-Winget {
 function Winget-Install($id, $name){
   if(-not (Ensure-Winget)){ return $false }
   Say "  正在用 winget 安装 $name（请稍候，别关窗口）……"
-  winget install -e --id $id --accept-source-agreements --accept-package-agreements --silent 2>&1 | Out-Null
+  winget install -e --id $id --accept-source-agreements --accept-package-agreements --silent
+  $rc = $LASTEXITCODE
   Refresh-Path
-  return $true
+  if($rc -ne 0 -and $rc -ne -1978335189){ Warn "winget 装 $name 返回码 $rc（非 0，可能失败或已是最新；下面会再核对一次）" }
+  return ($rc -eq 0 -or $rc -eq -1978335189)
 }
 
 function Pkg-Installed($id){
@@ -94,6 +96,7 @@ function Check-Network {
 function Detect {
   Hr; Say "先看看你这台电脑现在的安装情况"; Hr
   Say "  本机：$WinName (build $Build) / $Arch"
+  if(-not [Environment]::Is64BitProcess){ Warn "你开的是 32 位 PowerShell。建议关掉、用开始菜单里普通的「Windows PowerShell」或「终端」重开，否则有些工具可能装不上。" }
   Say "  命令行工具(CLI)=终端里用、功能最全；桌面 App=图形界面、更直观。两者不冲突、可以都装。"
   Say "  >> 命令行工具（CLI）"
   if(Has 'claude'){ Ok "Claude Code (CLI) 已装" } else { Bad "Claude Code (CLI) 未装" }
@@ -132,9 +135,11 @@ function Do-Claude {
   }
   if(-not (Ask "现在安装 Claude Code（命令行）？")){ $script:SKIPPED+="Claude Code"; return }
   Say "  正在下载安装（官方 PowerShell 安装器，1-2 分钟，别关窗口）……"
-  try { Invoke-Expression (Invoke-RestMethod https://claude.ai/install.ps1) } catch { Warn "安装过程报错：$_" }
+  $ok=$true
+  try { Invoke-Expression (Invoke-RestMethod https://claude.ai/install.ps1) } catch { $ok=$false; Warn "安装过程报错：$_" }
   Refresh-Path
   if(Has 'claude'){ Ok "Claude Code 安装成功"; $script:INSTALLED+="Claude Code" }
+  elseif(-not $ok){ Bad "Claude Code 安装失败（多半网络），截图发小组长。"; $script:FAILED+="Claude Code（安装失败）" }
   else { Warn "装完了但当前窗口没认到命令（结束后重开 PowerShell 再试 claude --version）"; $script:INSTALLED+="Claude Code（需重开终端确认）" }
 }
 
@@ -148,9 +153,11 @@ function Do-Codex {
   }
   if(-not (Ask "现在安装 Codex？")){ $script:SKIPPED+="Codex"; return }
   Say "  正在下载安装（官方 PowerShell 安装器）……"
-  try { Invoke-Expression (Invoke-RestMethod https://chatgpt.com/codex/install.ps1) } catch { Warn "安装过程报错：$_" }
+  $ok=$true
+  try { Invoke-Expression (Invoke-RestMethod https://chatgpt.com/codex/install.ps1) } catch { $ok=$false; Warn "安装过程报错：$_" }
   Refresh-Path
   if(Has 'codex'){ Ok "Codex 安装成功"; $script:INSTALLED+="Codex" }
+  elseif(-not $ok){ Bad "Codex 安装失败（多半网络），截图发小组长。"; $script:FAILED+="Codex（安装失败）" }
   else { Warn "装完了但当前窗口没认到命令（结束后重开 PowerShell）"; $script:INSTALLED+="Codex（需重开终端）" }
 }
 
@@ -159,9 +166,11 @@ function Do-Hermes {
   if(Has 'hermes'){ Ok "已安装"; $script:SKIPPED+="Hermes"; return }
   if(-not (Ask "现在安装 Hermes？（会自动装 Git/Python/Node 等依赖，耗时几分钟）")){ $script:SKIPPED+="Hermes"; return }
   Say "  正在装 Hermes：会自动下载依赖，首次 5-15 分钟。看到没进度条别以为卡住、别关窗口。"
-  try { Invoke-Expression (Invoke-RestMethod https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.ps1) } catch { Warn "安装过程报错：$_" }
+  $ok=$true
+  try { Invoke-Expression (Invoke-RestMethod https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.ps1) } catch { $ok=$false; Warn "安装过程报错：$_" }
   Refresh-Path
   if(Has 'hermes'){ Ok "Hermes 安装成功"; $script:INSTALLED+="Hermes" }
+  elseif(-not $ok){ Bad "Hermes 安装失败（多半网络），截图发小组长。"; $script:FAILED+="Hermes（安装失败）" }
   else { Warn "装完了但当前窗口没认到命令（结束后重开 PowerShell）"; $script:INSTALLED+="Hermes（需重开终端）" }
 }
 
@@ -175,6 +184,14 @@ function Install-Node {
   return (Has 'node')
 }
 
+function Ensure-Git {
+  if(Has 'git'){ return }
+  Warn "没检测到 Git，正在用 winget 自动装（Claude Code / Hermes 都可能要用）……"
+  Winget-Install 'Git.Git' 'Git for Windows' | Out-Null
+  Refresh-Path
+  if(Has 'git'){ Ok "Git 安装成功" } else { Warn "Git 没装上（当前窗口可能没刷新）；后续若报缺 Git，重开 PowerShell 或手动装 https://gitforwindows.org" }
+}
+
 function Do-Larkcli {
   Step "飞书 CLI —— 让 AI 直接读写你的飞书表格 / 文档"
   if(Has 'lark-cli'){ Ok "已安装"; $script:SKIPPED+="飞书 CLI"; return }
@@ -186,7 +203,7 @@ function Do-Larkcli {
   }
   if(-not (Ask "现在安装飞书 CLI？")){ $script:SKIPPED+="飞书 CLI"; return }
   Say "  通过 npm 安装（@latest 规避旧版在 Windows 上的解压坑）……"
-  try { npm install -g "@larksuite/cli@latest" } catch { Warn "安装过程报错：$_" }
+  try { cmd /c "npm install -g @larksuite/cli@latest" } catch { Warn "安装过程报错：$_" }
   Refresh-Path
   if(Has 'lark-cli'){ Ok "飞书 CLI 安装成功"; $script:INSTALLED+="飞书 CLI" }
   else { Warn "装完了但当前窗口没认到命令（结束后重开 PowerShell）"; $script:INSTALLED+="飞书 CLI（需重开终端）" }
@@ -196,9 +213,8 @@ function Do-Obsidian {
   Step "Obsidian —— 你的 AI 第二大脑 / 知识库（核心）"
   if(Pkg-Installed 'Obsidian.Obsidian'){ Ok "已安装"; $script:SKIPPED+="Obsidian"; return }
   if(-not (Ask "现在安装 Obsidian（核心知识库）？")){ $script:SKIPPED+="Obsidian"; return }
-  if(Winget-Install 'Obsidian.Obsidian' 'Obsidian'){
-    if(Pkg-Installed 'Obsidian.Obsidian'){ Ok "Obsidian 安装成功"; $script:INSTALLED+="Obsidian"; return }
-  }
+  Winget-Install 'Obsidian.Obsidian' 'Obsidian' | Out-Null
+  if(Pkg-Installed 'Obsidian.Obsidian'){ Ok "Obsidian 安装成功"; $script:INSTALLED+="Obsidian"; return }
   Warn "自动装没成功（多半网络），手动下载：https://obsidian.md/download"
   Start-Process "https://obsidian.md/download" 2>$null
   $script:FAILED+="Obsidian（请手动装）"
@@ -213,9 +229,8 @@ function Start-CCSwitch {
 function Install-CCSwitch {
   if(Pkg-Installed 'farion1231.CC-Switch'){ Ok "CC Switch 已安装"; Start-CCSwitch; return }
   Say "帮你自动下载安装 CC Switch（一键管理中转，Claude Code / Codex / Hermes 的中转都在它里面配）"
-  if(Winget-Install 'farion1231.CC-Switch' 'CC Switch'){
-    if(Pkg-Installed 'farion1231.CC-Switch'){ Ok "CC Switch 安装成功"; Start-CCSwitch; return }
-  }
+  Winget-Install 'farion1231.CC-Switch' 'CC Switch' | Out-Null
+  if(Pkg-Installed 'farion1231.CC-Switch'){ Ok "CC Switch 安装成功"; Start-CCSwitch; return }
   Warn "自动装没成功（多半网络），帮你打开下载页手动装（下载 Windows 版 .msi 双击安装）："
   Say  "  https://github.com/farion1231/cc-switch/releases/latest"
   Start-Process "https://github.com/farion1231/cc-switch/releases/latest" 2>$null
@@ -232,7 +247,7 @@ function Auth-Phase {
   }
   if(Has 'lark-cli'){
     Step "2) 配置并授权 飞书 CLI"
-    if(Ask "现在配置飞书 CLI？"){ try { lark-cli config init; lark-cli auth login } catch { Warn "授权没完成，稍后可手动运行 lark-cli auth login" } }
+    if(Ask "现在配置飞书 CLI？"){ try { cmd /c "lark-cli config init"; cmd /c "lark-cli auth login" } catch { Warn "授权没完成，稍后可手动运行 lark-cli auth login" } }
   }
   if(Has 'hermes'){
     Step "3) Hermes —— 装好就行，先不用配"
@@ -300,9 +315,9 @@ function Do-Clients {
   if(Ask "现在装 Codex 桌面 App？（走 Microsoft 商店）"){
     if(Ensure-Winget){
       Say "  正在从 Microsoft Store 安装 Codex App……"
-      winget install Codex -s msstore --accept-source-agreements --accept-package-agreements 2>&1 | Out-Null
-      Ok "（如未自动打开：开始菜单或 Microsoft Store 搜 Codex 即可）"
-      $script:INSTALLED+="Codex 桌面 App"
+      winget install Codex -s msstore --accept-source-agreements --accept-package-agreements
+      if($LASTEXITCODE -eq 0){ Ok "Codex 桌面 App 安装成功（开始菜单搜 Codex 打开）"; $script:INSTALLED+="Codex 桌面 App" }
+      else { Warn "Codex App 没装成功（商店源可能要登录或网络问题）。可去 Microsoft Store 搜 Codex 手动装。" }
     }
   }
 }
@@ -334,6 +349,7 @@ function Main {
   Hr; Say "第一步：逐个检查并安装"; Hr
   if(-not (Ask "开始安装流程？")){ Say "好的，下次再来。已装好的不会重复装。"; return }
   Setup-Workspace
+  Ensure-Git
   Do-Claude
   Do-Codex
   Do-Hermes

@@ -179,7 +179,6 @@ do_hermes(){
 # ---------- Node.js 自动安装（官方包，免 brew/密码/浏览器）----------
 install_node(){
   has_cmd node && return 0
-  has_cmd brew && brew install node 2>/dev/null && has_cmd node && { ok "Node 安装成功（Homebrew）"; return 0; }
   local a ver url dir
   [ "$ARCH" = "arm64" ] && a="darwin-arm64" || a="darwin-x64"
   ver=$(curl -fsSL https://nodejs.org/dist/index.json 2>/dev/null | grep -o '"version":"v[0-9.]*"' | head -1 | grep -o 'v[0-9.]*')
@@ -221,17 +220,13 @@ do_obsidian(){
   step "Obsidian —— 你的 AI 第二大脑 / 知识库（核心）"
   if [ -d "/Applications/Obsidian.app" ]; then ok "已安装 /Applications/Obsidian.app"; SKIPPED+=("Obsidian"); return; fi
   ask_continue "现在安装 Obsidian（核心知识库）？" || { SKIPPED+=("Obsidian"); return; }
-  # 优先 Homebrew cask（最简单）
-  if has_cmd brew && brew install --cask obsidian 2>/dev/null; then
-    ok "Obsidian 安装成功（Homebrew）"; INSTALLED+=("Obsidian"); return
-  fi
-  # 无 brew 或失败：下载官方 universal dmg 自动安装
+  # 下载官方 universal dmg 自动安装
   say "下载 Obsidian 安装包（约几十 MB，稍等）..."
   local url tmp vol
   url=$(curl -fsSL https://api.github.com/repos/obsidianmd/obsidian-releases/releases/latest 2>/dev/null | grep -o 'https://[^"]*universal\.dmg' | head -1)
   tmp="/tmp/Obsidian-installer.dmg"
   if [ -n "$url" ] && curl -fsSL "$url" -o "$tmp" 2>/dev/null; then
-    vol=$(hdiutil attach "$tmp" -nobrowse 2>/dev/null | grep -o '/Volumes/[^ ]*' | head -1)
+    vol=$(hdiutil attach "$tmp" -nobrowse 2>/dev/null | grep -o '/Volumes/.*' | head -1)
     if [ -n "$vol" ] && [ -d "$vol/Obsidian.app" ]; then
       cp -R "$vol/Obsidian.app" /Applications/ 2>/dev/null && { ok "Obsidian 安装成功"; INSTALLED+=("Obsidian"); }
       hdiutil detach "$vol" >/dev/null 2>&1; rm -f "$tmp"
@@ -264,7 +259,7 @@ install_ccswitch(){
   if [ -n "$url" ]; then
     say "${DIM}正在下载 CC Switch（官方 GitHub 版，几十 MB）……${RST}"
     if curl -fsSL "$url" -o "$tmp" 2>/dev/null && [ -s "$tmp" ]; then
-      vol=$(hdiutil attach "$tmp" -nobrowse 2>/dev/null | grep -o '/Volumes/[^ ]*' | head -1)
+      vol=$(hdiutil attach "$tmp" -nobrowse 2>/dev/null | grep -o '/Volumes/.*' | head -1)
       app=$(ls -d "$vol"/*.app 2>/dev/null | head -1)
       [ -n "$app" ] && cp -R "$app" /Applications/ 2>/dev/null && ok "CC Switch 安装成功"
       [ -n "$vol" ] && hdiutil detach "$vol" >/dev/null 2>&1

@@ -1,7 +1,7 @@
 ---
 created: 2026-06-02 17:01:09 +0800
 summary: 航海家 6/6 大课 AI 工具一键部署脚本说明 | 学员下载运行、排错、授权指引
-last_change: 2026-06-03 00:34:13 +0800 — Windows 命令改用 go.ps1 引导器（学员只需粘贴一行 irm | iex）
+last_change: 2026-06-03 00:51:00 +0800 — 加 Codex 审查的远程执行风险提示（给分发者）
 ---
 
 # 航海家 · AI 工具一键部署助手
@@ -82,6 +82,7 @@ last_change: 2026-06-03 00:34:13 +0800 — Windows 命令改用 go.ps1 引导器
 - **学员命令（Windows）**：见上方「一句话用法（Windows）」的 PowerShell 一行命令（PowerShell 跑 `install.ps1`）
 - **发布仓库**：https://github.com/0xWinner98/mac-onboarding-setup （公开）。发布副本在 `/Users/kk/mac-onboarding-release/`，改 install.sh 后在该目录 `git commit -am '...' && git push` 更新，raw 链接不变（约 5 分钟 CDN 缓存）。
 - 脚本一律从各工具**官方源**安装，**不预置任何中转地址 / 密钥**（避免泄露和封号）。
+- **远程执行风险（Codex 审查提示）**：`go.ps1` / `install.sh` 从 GitHub main 拉取并执行，未做 tag pin / hash 校验——课程期快速迭代可接受；若要加固，改指向固定 release tag + SHA256 校验，并确保仓库写权限受控（防分支被污染）。
 - 中转走 CC Switch（学员自己装 + 组长私发中转配置），脚本只负责"带你装上 CC Switch"。
 - 各工具自带自动更新；本脚本如需改安装命令，直接编辑对应 `do_xxx` 函数即可。
 - 安装命令出处见下方来源，升级前可比对官方是否变更。
