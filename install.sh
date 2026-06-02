@@ -61,18 +61,44 @@ MACOS_MAJOR=$(printf '%s' "$MACOS_VER" | cut -d. -f1)
 # ---------- 状态记录 ----------
 INSTALLED=(); SKIPPED=(); FAILED=()
 
+# ---------- 网络检测（这些工具的源都在国外，得先能连上）----------
+check_network(){
+  hr; say "${BOLD}先检查网络${RST}（AI 工具的源大多在国外，连不上就装不了）"; hr
+  local gh="" gg=""
+  curl -fsS -m 8 -o /dev/null "https://github.com" 2>/dev/null && gh=1
+  curl -fsS -m 8 -o /dev/null "https://www.google.com" 2>/dev/null && gg=1
+  [ -n "$gh" ] && ok "GitHub 可访问" || err "GitHub 连不上"
+  [ -n "$gg" ] && ok "Google 可访问" || err "Google 连不上"
+  if [ -z "$gh" ] || [ -z "$gg" ]; then
+    warn "你的网络连不上 GitHub / Google——这台电脑当前装不了这些工具（不是脚本的问题，是网络）。"
+    say "  ${DIM}请先科学上网（确认浏览器能打开 github.com 和 google.com）再回来跑本脚本。${RST}"
+    ask_continue "知道了，仍要继续试？（多半会失败）" || { say "好的，弄通网络再来。"; exit 0; }
+  fi
+}
+
 # ---------- 检测清单 ----------
 detect(){
   hr; say "${BOLD}先看看你这台电脑现在的安装情况${RST}"; hr
   say "  ${DIM}本机：$CHIP / macOS $MACOS_VER${RST}"
-  has_cmd claude   && ok "Claude Code —— $(claude --version 2>/dev/null | head -1)"   || err "Claude Code —— 未安装"
-  has_cmd codex    && ok "Codex —— $(codex --version 2>/dev/null | head -1)"          || err "Codex —— 未安装"
-  has_cmd hermes   && ok "Hermes —— $(hermes --version 2>/dev/null | head -1)"        || err "Hermes —— 未安装"
-  has_cmd lark-cli && ok "飞书 CLI —— $(lark-cli --version 2>/dev/null | head -1)"    || err "飞书 CLI —— 未安装"
-  [ -d /Applications/Obsidian.app ] && ok "Obsidian —— 已安装"                        || err "Obsidian —— 未安装"
+  say "${DIM}  命令行工具(CLI)=终端里用、功能最全；桌面 App=图形界面、更直观。两者不冲突、可以都装。${RST}"
+  say "${BOLD}  ▸ 命令行工具（CLI）${RST}"
+  has_cmd claude   && ok "Claude Code (CLI) —— $(claude --version 2>/dev/null | head -1)"   || err "Claude Code (CLI) —— 未装"
+  has_cmd codex    && ok "Codex (CLI) —— $(codex --version 2>/dev/null | head -1)"          || err "Codex (CLI) —— 未装"
+  has_cmd hermes   && ok "Hermes (CLI) —— $(hermes --version 2>/dev/null | head -1)"        || err "Hermes (CLI) —— 未装"
+  has_cmd lark-cli && ok "飞书 CLI —— $(lark-cli --version 2>/dev/null | head -1)"          || err "飞书 CLI —— 未装"
+  say "${BOLD}  ▸ 桌面 App / 知识库${RST}"
+  [ -d /Applications/Obsidian.app ] && ok "Obsidian —— 已装" || err "Obsidian —— 未装"
+  [ -d "/Applications/Claude.app" ] && ok "Claude 桌面 App —— 已装" || say "  ◦ Claude 桌面 App —— 未装（可选，图形界面）"
+  ls -d /Applications/Codex*.app >/dev/null 2>&1 && ok "Codex 桌面 App —— 已装" || say "  ◦ Codex 桌面 App —— 未装（可选，需 Apple 芯片 + macOS 14+）"
+  if [ -n "$MACOS_MAJOR" ] && [ "$MACOS_MAJOR" -lt 13 ]; then
+    warn "你的 macOS 偏旧（<13）：命令行 Claude Code 装不了，会引导你改用 Claude 桌面 App。"
+  fi
+  if [ "$ARCH" != "arm64" ] || { [ -n "$MACOS_MAJOR" ] && [ "$MACOS_MAJOR" -lt 14 ]; }; then
+    say "${DIM}  注：Codex 桌面 App 需要 Apple 芯片 + macOS 14+，你的电脑不支持——用命令行 Codex（CLI）或 Obsidian 的 Claudian 插件即可。${RST}"
+  fi
   say "${DIM}  ── 下面是依赖，不用单独管 ──${RST}"
-  has_cmd node && ok "Node.js —— $(node -v)" || warn "Node.js —— 没有（装飞书 CLI 时自动处理）"
-  has_cmd git  && ok "Git —— 已就绪"         || warn "Git —— 没有（装 Hermes 时会提示安装）"
+  has_cmd node && ok "Node.js —— $(node -v)" || warn "Node.js —— 没有（装飞书 CLI 时自动装）"
+  has_cmd git  && ok "Git —— 已就绪"         || warn "Git —— 没有（装 Hermes 时会提示装）"
 }
 
 # ---------- 工作区（知识库文件夹）----------
@@ -218,7 +244,7 @@ do_obsidian(){
 # ---------- CC Switch（中转管理，仅在用户选「中转」时调用）----------
 install_ccswitch(){
   if [ -d "/Applications/CC Switch.app" ] || [ -d "/Applications/cc-switch.app" ]; then ok "CC Switch 已安装"; return; fi
-  say "${BOLD}装 CC Switch${RST}（管理中转的小软件，Claude Code / Codex 的中转都在它里面切；Hermes 不走这里）"
+  say "${BOLD}装 CC Switch${RST}（管理中转的小软件，Claude Code / Codex / Hermes 的中转都能在它里面切）"
   say "  在打开的页面下载 macOS 版（.dmg）→ 双击 → 把图标拖进 Applications："
   say "  ${CYN}https://github.com/farion1231/cc-switch/releases/latest${RST}"
   has_cmd open && open "https://github.com/farion1231/cc-switch/releases/latest" 2>/dev/null
@@ -243,9 +269,10 @@ auth_phase(){
   fi
 
   if has_cmd hermes; then
-    step "③ 配置 Hermes（交互式向导）"
-    say "即将运行 ${DIM}hermes setup${RST}，跟着向导选模型 / 登录。"
-    ask_continue "现在配置 Hermes？" && { hermes setup </dev/tty || warn "配置没完成，稍后可手动运行 hermes setup"; }
+    step "③ Hermes —— 装好就行，先不用配"
+    ok "Hermes 命令行已就绪（hermes --version 能看到版本就成）。"
+    say "  ${DIM}今晚不用急着选模型 / 订阅——那一步等你了解后再弄，免得不懂时误操作。${RST}"
+    say "  要用中转的话：和 Claude Code / Codex 一样，在 ${BOLD}CC Switch${RST} 里点右上角「新建」，新建一个 provider 填中转地址和密钥即可（不想敲命令行也能配 Hermes）。"
   fi
 
   if has_cmd claude; then
@@ -258,7 +285,7 @@ auth_phase(){
     if [ "$ccmode" = "2" ]; then
       say ""
       install_ccswitch
-      say "  ${BOLD}装好后配置${RST}：打开 CC Switch → 添加供应商 → 填${BOLD}小组长发的中转地址和密钥${RST} → 选中 → 应用，之后 Claude Code / Codex 都能用中转。"
+      say "  ${BOLD}装好后配置${RST}：打开 CC Switch → 添加供应商 → 填${BOLD}小组长发的中转地址和密钥${RST} → 选中 → 应用，之后 Claude Code / Codex / Hermes 都能用中转。"
       say "${DIM}（中转地址和密钥找小组长拿；脚本不预置，避免泄露和封号）${RST}"
     else
       say "即将运行 ${DIM}claude${RST}，会打开浏览器走官方登录；登录后在里面输入 /exit 退出。"
@@ -320,7 +347,7 @@ banner(){
 
 main(){
   ensure_local_bin
-  if [ "${1:-}" = "--check" ]; then banner; detect; echo; say "（这是只检测模式，没有安装任何东西）"; exit 0; fi
+  if [ "${1:-}" = "--check" ]; then banner; check_network; detect; echo; say "（这是只检测模式，没有安装任何东西）"; exit 0; fi
 
   # curl | bash 运行时仍需交互授权，必须有可用的终端
   if [ ! -r /dev/tty ]; then
@@ -337,6 +364,7 @@ main(){
   say "工具都从${BOLD}各家官方源${RST}下载，脚本里不含任何密钥。"
   say "按提示${BOLD}回车${RST}即可；不想装某个就输 ${BOLD}s${RST} 跳过；想退出输 ${BOLD}q${RST}。"
   say "${DIM}脚本不会动你的密码，所有登录都在官方页面由你自己完成。${RST}"
+  check_network
   detect
   hr; say "${BOLD}第一步：逐个检查并安装${RST}"; hr
   ask_continue "开始安装流程？" || { say "好的，下次再来。已装好的不会重复装。"; exit 0; }
