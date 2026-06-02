@@ -145,21 +145,37 @@ do_hermes(){
   else err "Hermes 安装失败。稍后重试，或截图发小组长。"; FAILED+=("Hermes"); fi
 }
 
+# ---------- Node.js 自动安装（官方包，免 brew/密码/浏览器）----------
+install_node(){
+  has_cmd node && return 0
+  has_cmd brew && brew install node 2>/dev/null && has_cmd node && { ok "Node 安装成功（Homebrew）"; return 0; }
+  local a ver url dir
+  [ "$ARCH" = "arm64" ] && a="darwin-arm64" || a="darwin-x64"
+  ver=$(curl -fsSL https://nodejs.org/dist/index.json 2>/dev/null | grep -o '"version":"v[0-9.]*"' | head -1 | grep -o 'v[0-9.]*')
+  [ -z "$ver" ] && ver="v22.11.0"
+  url="https://nodejs.org/dist/$ver/node-$ver-$a.tar.gz"
+  say "${DIM}下载 Node $ver（官方包，免 brew、免密码）……${RST}"
+  curl -fsSL "$url" -o /tmp/node.tar.gz 2>/dev/null && [ -s /tmp/node.tar.gz ] || return 1
+  mkdir -p "$HOME/.local"
+  tar -xzf /tmp/node.tar.gz -C "$HOME/.local" 2>/dev/null || { rm -f /tmp/node.tar.gz; return 1; }
+  rm -f /tmp/node.tar.gz
+  dir="$HOME/.local/node-$ver-$a/bin"
+  export PATH="$dir:$PATH"
+  local rc="$HOME/.zshrc"; [ "$(basename "${SHELL:-/bin/zsh}")" = "bash" ] && rc="$HOME/.bash_profile"
+  grep -q "node-$ver-$a/bin" "$rc" 2>/dev/null || printf '\nexport PATH="%s:$PATH"  # 航海家脚本：Node\n' "$dir" >> "$rc"
+  has_cmd node && { ok "Node 安装成功：$(node -v)"; return 0; }
+  return 1
+}
+
 do_larkcli(){
   step "飞书 CLI —— 让 AI 直接读写你的飞书表格 / 文档"
   if has_cmd lark-cli; then ok "已安装：$(lark-cli --version 2>/dev/null | head -1)"; SKIPPED+=("飞书 CLI"); return; fi
   if ! has_cmd node; then
-    warn "飞书 CLI 需要 Node.js，但没检测到。"
-    if has_cmd brew; then
-      if ask_continue "检测到 Homebrew，用它安装 Node.js？"; then
-        if brew install node; then ok "Node 安装成功：$(node -v)"
-        else err "Node 安装失败。"; FAILED+=("飞书 CLI（Node 装失败）"); return; fi
-      else SKIPPED+=("飞书 CLI（缺 Node）"); return; fi
-    else
-      warn "没有 Homebrew。请到 Node.js 官网下载 LTS 版双击安装，装完重跑本脚本："
-      say "  ${CYN}https://nodejs.org/zh-cn/download${RST}"
-      has_cmd open && { ask_continue "现在打开 Node.js 下载页？" && open "https://nodejs.org/zh-cn/download" || true; }
-      SKIPPED+=("飞书 CLI（缺 Node，装完重跑）"); return
+    warn "飞书 CLI 需要 Node.js，没检测到，正在自动装（免 brew、免密码）……"
+    if ! install_node; then
+      err "Node 自动安装失败——多半是网络连不上 nodejs.org（前面连 chatgpt / astral 也失败，就是网络不通）。"
+      say "  ${DIM}先把网络弄通（科学上网）再重跑；或到 ${RST}${CYN}https://nodejs.org/zh-cn/download${RST}${DIM} 手动下 LTS 双击装。${RST}"
+      SKIPPED+=("飞书 CLI（缺 Node，自动装失败/网络）"); return
     fi
   fi
   say "将通过 npm 安装：${DIM}npm install -g @larksuite/cli${RST}"
