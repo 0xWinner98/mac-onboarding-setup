@@ -65,8 +65,46 @@ function Install-CodexOfficial {
   }
   Invoke-Expression $installer
 }
+function Repair-CodexSandboxSetup {
+  $bin = Codex-BinDir
+  $codex = Join-Path $bin "codex.exe"
+  if(-not (Test-Path $codex)){ return $false }
+  $dst = Join-Path $bin "codex-windows-sandbox-setup.exe"
+  if(Test-Path $dst){ return $true }
+
+  $candidates = @()
+  $current = Join-Path $env:LOCALAPPDATA "openai-codex\current"
+  $candidates += (Join-Path $current "codex-resources\codex-windows-sandbox-setup.exe")
+  $candidates += (Join-Path (Split-Path -Parent $bin) "codex-resources\codex-windows-sandbox-setup.exe")
+  try {
+    $item = Get-Item -LiteralPath $bin -Force -ErrorAction Stop
+    foreach($target in @($item.Target)){
+      if(-not [string]::IsNullOrWhiteSpace($target)){
+        $candidates += (Join-Path (Split-Path -Parent $target) "codex-resources\codex-windows-sandbox-setup.exe")
+      }
+    }
+  } catch {}
+
+  foreach($src in $candidates){
+    if(Test-Path $src){
+      Copy-Item -LiteralPath $src -Destination $dst -Force
+      return (Test-Path $dst)
+    }
+  }
+
+  try {
+    $verText = (& $codex --version 2>$null | Select-Object -First 1)
+    if("$verText" -notmatch '([0-9]+\.[0-9]+\.[0-9]+)'){ return $false }
+    $ver = $Matches[1]
+    $target = if((Codex-FallbackArchitecture) -eq 'Arm64'){ 'aarch64-pc-windows-msvc' } else { 'x86_64-pc-windows-msvc' }
+    $url = "https://github.com/openai/codex/releases/download/rust-v$ver/codex-windows-sandbox-setup-$target.exe"
+    Invoke-WebRequest -Uri $url -OutFile $dst -UseBasicParsing -ErrorAction Stop
+    return (Test-Path $dst)
+  } catch { return $false }
+}
+function Codex-Ready { return ((Codex-Ok) -and (Repair-CodexSandboxSetup)) }
 # 是否所有必备工具都已装齐（全装齐就恭喜跳过）
-function All-Installed { return ( ((Has 'claude') -or (Pkg-Installed 'Anthropic.Claude')) -and (Codex-Ok) -and (Has 'hermes') -and (Has 'lark-cli') -and (Node-Ok) -and (Pkg-Installed 'Obsidian.Obsidian') ) }
+function All-Installed { return ( ((Has 'claude') -or (Pkg-Installed 'Anthropic.Claude')) -and (Codex-Ready) -and (Has 'hermes') -and (Has 'lark-cli') -and (Node-Ok) -and (Pkg-Installed 'Obsidian.Obsidian') ) }
 
 function Refresh-Path {
   $m=[System.Environment]::GetEnvironmentVariable("Path","Machine")
@@ -220,7 +258,12 @@ function Do-Claude {
 
 function Do-Codex {
   Step "Codex —— OpenAI 的 AI 终端（命令行）"
-  if(Codex-Ok){ Ok "已安装"; $script:SKIPPED+="Codex"; return }
+  if(Codex-Ok){
+    if(Repair-CodexSandboxSetup){ Ok "已安装，Windows sandbox 辅助程序已就绪" }
+    else { Ok "已安装"; Warn "Windows sandbox 辅助程序未补齐；如启动 Codex 弹窗找不到 codex-windows-sandbox-setup.exe，截图发群里。" }
+    $script:SKIPPED+="Codex"
+    return
+  }
   if($Build -lt 17763){
     Warn "你的 Windows 偏旧（build $Build）。命令行 Codex 官方要求 Win10 1809+，可能装不上。"
     Say  "  建议：升级 Windows，或用 Codex 桌面 App（后面会引导）。"
@@ -232,7 +275,11 @@ function Do-Codex {
   try { Install-CodexOfficial } catch { $ok=$false; Warn "安装过程报错：$_" }
   Refresh-Path
   Ensure-CodexPath | Out-Null
-  if(Codex-Ok){ Ok "Codex 安装成功"; $script:INSTALLED+="Codex" }
+  if(Codex-Ok){
+    if(Repair-CodexSandboxSetup){ Ok "Codex 安装成功，Windows sandbox 辅助程序已就绪" }
+    else { Ok "Codex 安装成功"; Warn "Windows sandbox 辅助程序未补齐；如启动 Codex 弹窗找不到 codex-windows-sandbox-setup.exe，截图发群里。" }
+    $script:INSTALLED+="Codex"
+  }
   elseif(-not $ok){ Bad "Codex 安装失败（多半网络），截图发到群里。"; $script:FAILED+="Codex（安装失败）" }
   else {
     Bad "Codex 安装后仍没识别到命令。"
