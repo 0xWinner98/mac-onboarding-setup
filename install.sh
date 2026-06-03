@@ -170,7 +170,13 @@ do_claude(){
   fi
   ask_continue "现在安装 Claude Code（命令行）？" || { SKIPPED+=("Claude Code"); return; }
   say "${DIM}正在下载安装，可能 1-2 分钟，请耐心等、别关窗口……${RST}"
-  curl -fsSL https://claude.ai/install.sh | bash 2>&1 | tee /tmp/cc_install.log
+  local cc_script; cc_script=$(curl -fsSL https://claude.ai/install.sh 2>/dev/null)
+  if printf '%s' "$cc_script" | grep -qiE 'just a moment|cf_chl|challenge-platform|<html'; then
+    err "Claude Code 下载被 Cloudflare 拦了（返回人机验证页，不是脚本）——这不是网络不通。"
+    say "  ${DIM}你的 IP 被当成机房/数据中心 IP（自建 VPS / 机场节点常见）。解决：换住宅 IP（家庭宽带 / 手机热点 / 住宅节点）重跑，或授权那步选「中转」走 CC Switch。${RST}"
+    FAILED+=("Claude Code（被 Cloudflare 拦 → 换住宅 IP 或走中转）"); return
+  fi
+  printf '%s' "$cc_script" | bash 2>&1 | tee /tmp/cc_install.log
   ensure_local_bin
   if has_cmd claude; then
     ok "Claude Code 安装成功：$(claude --version 2>/dev/null | head -1)"; INSTALLED+=("Claude Code")

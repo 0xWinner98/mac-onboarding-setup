@@ -142,10 +142,19 @@ function Do-Claude {
   }
   if(-not (Ask "现在安装 Claude Code（命令行）？")){ $script:SKIPPED+="Claude Code"; return }
   Say "  正在下载安装（官方 PowerShell 安装器，1-2 分钟，别关窗口）……"
-  $ok=$true
-  try { Invoke-Expression (Invoke-RestMethod https://claude.ai/install.ps1 -ErrorAction Stop) } catch { $ok=$false; Warn "安装过程报错：$_" }
+  $ok=$true; $cfBlocked=$false
+  try {
+    $cc = Invoke-RestMethod https://claude.ai/install.ps1 -ErrorAction Stop
+    if("$cc" -match 'Just a moment|cf_chl|challenge-platform|<html') { $cfBlocked=$true; $ok=$false }
+    else { Invoke-Expression "$cc" }
+  } catch { $ok=$false; Warn "安装过程报错：$_" }
   Refresh-Path
   if(Has 'claude'){ Ok "Claude Code 安装成功"; $script:INSTALLED+="Claude Code" }
+  elseif($cfBlocked){
+    Bad "Claude Code 下载被 Cloudflare 拦了（返回的是人机验证页，不是脚本）——这不是网络不通。"
+    Say "  你的 IP 被当成机房/数据中心 IP（自建 VPS / 机场节点常见）。解决：换住宅 IP（家庭宽带 / 手机热点 / 住宅节点）重跑，或授权那步选「中转」走 CC Switch。"
+    $script:FAILED+="Claude Code（被 Cloudflare 拦 → 换住宅 IP 或走中转）"
+  }
   elseif(-not $ok){ Bad "Claude Code 安装失败（多半网络），截图发到群里。"; $script:FAILED+="Claude Code（安装失败）" }
   else { Warn "装完了但当前窗口没认到命令（结束后重开 PowerShell 再试 claude --version）"; $script:INSTALLED+="Claude Code（需重开终端确认）" }
 }
