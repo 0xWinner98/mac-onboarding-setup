@@ -28,8 +28,23 @@ $script:INSTALLED=@(); $script:SKIPPED=@(); $script:FAILED=@()
 function Has($cmd){ return [bool](Get-Command $cmd -ErrorAction SilentlyContinue) }
 # Node 是否真可用：node 和 npm 都要在（飞书 CLI 要 npm）
 function Node-Ok { return ((Has 'node') -and (Has 'npm')) }
+# Codex 官方 Windows 安装器默认放这里；有时装好了但当前 PowerShell PATH 没刷新。
+function Codex-BinDir { return (Join-Path $env:LOCALAPPDATA "Programs\OpenAI\Codex\bin") }
+function Ensure-CodexPath {
+  $bin = Codex-BinDir
+  $exe = Join-Path $bin "codex.exe"
+  if(-not (Test-Path $exe)){ return $false }
+  if((";$env:Path;") -notlike "*;$bin;*"){ $env:Path = "$bin;$env:Path" }
+  $u=[System.Environment]::GetEnvironmentVariable("Path","User")
+  if((";$u;") -notlike "*;$bin;*"){
+    if([string]::IsNullOrWhiteSpace($u)){ [System.Environment]::SetEnvironmentVariable("Path",$bin,"User") }
+    else { [System.Environment]::SetEnvironmentVariable("Path","$bin;$u","User") }
+  }
+  return $true
+}
+function Codex-Ok { if(Has 'codex'){ return $true }; return (Ensure-CodexPath -and (Has 'codex')) }
 # 是否所有必备工具都已装齐（全装齐就恭喜跳过）
-function All-Installed { return ( ((Has 'claude') -or (Pkg-Installed 'Anthropic.Claude')) -and (Has 'codex') -and (Has 'hermes') -and (Has 'lark-cli') -and (Node-Ok) -and (Pkg-Installed 'Obsidian.Obsidian') ) }
+function All-Installed { return ( ((Has 'claude') -or (Pkg-Installed 'Anthropic.Claude')) -and (Codex-Ok) -and (Has 'hermes') -and (Has 'lark-cli') -and (Node-Ok) -and (Pkg-Installed 'Obsidian.Obsidian') ) }
 
 function Refresh-Path {
   $m=[System.Environment]::GetEnvironmentVariable("Path","Machine")
@@ -104,7 +119,7 @@ function Detect {
   Say "  命令行工具(CLI)=终端里用、功能最全；桌面 App=图形界面、更直观。两者不冲突、可以都装。"
   Say "  >> 命令行工具（CLI）"
   if(Has 'claude'){ Ok "Claude Code (CLI) 已装" } else { Bad "Claude Code (CLI) 未装" }
-  if(Has 'codex'){ Ok "Codex (CLI) 已装" } else { Bad "Codex (CLI) 未装" }
+  if(Codex-Ok){ Ok "Codex (CLI) 已装" } else { Bad "Codex (CLI) 未装" }
   if(Has 'hermes'){ Ok "Hermes (CLI) 已装" } else { Bad "Hermes (CLI) 未装" }
   if(Has 'lark-cli'){ Ok "飞书 CLI 已装" } else { Bad "飞书 CLI 未装" }
   if($Build -lt 17763){
@@ -166,7 +181,7 @@ function Do-Claude {
 
 function Do-Codex {
   Step "Codex —— OpenAI 的 AI 终端（命令行）"
-  if(Has 'codex'){ Ok "已安装"; $script:SKIPPED+="Codex"; return }
+  if(Codex-Ok){ Ok "已安装"; $script:SKIPPED+="Codex"; return }
   if($Build -lt 17763){
     Warn "你的 Windows 偏旧（build $Build）。命令行 Codex 官方要求 Win10 1809+，可能装不上。"
     Say  "  建议：升级 Windows，或用 Codex 桌面 App（后面会引导）。"
@@ -177,9 +192,14 @@ function Do-Codex {
   $ok=$true
   try { Invoke-Expression (Invoke-RestMethod https://chatgpt.com/codex/install.ps1 -ErrorAction Stop) } catch { $ok=$false; Warn "安装过程报错：$_" }
   Refresh-Path
-  if(Has 'codex'){ Ok "Codex 安装成功"; $script:INSTALLED+="Codex" }
+  Ensure-CodexPath | Out-Null
+  if(Codex-Ok){ Ok "Codex 安装成功"; $script:INSTALLED+="Codex" }
   elseif(-not $ok){ Bad "Codex 安装失败（多半网络），截图发到群里。"; $script:FAILED+="Codex（安装失败）" }
-  else { Warn "装完了但当前窗口没认到命令（结束后重开 PowerShell）"; $script:INSTALLED+="Codex（需重开终端）" }
+  else {
+    Bad "Codex 安装后仍没识别到命令。"
+    Say "  请截图发到群里；也可以先手动检查：$env:LOCALAPPDATA\Programs\OpenAI\Codex\bin\codex.exe --version"
+    $script:FAILED+="Codex（安装后命令未识别）"
+  }
 }
 
 function Do-Hermes {
@@ -381,6 +401,19 @@ function Summary {
   if($script:FAILED.Count   -gt 0){ Bad "还没搞定（需处理）："; $script:FAILED | ForEach-Object { Say "    - $_" }; Say "  把上面这几行截图发到群里。" }
 }
 
+function Show-FinalCheck {
+  Hr; Say "最后确认：逐个检查命令是否能用"; Hr
+  if(Has 'claude'){ Ok "Claude Code 可用：$(claude --version 2>$null | Select-Object -First 1)" } else { Bad "Claude Code 未识别" }
+  if(Codex-Ok){ Ok "Codex 可用：$(codex --version 2>$null | Select-Object -First 1)" }
+  else {
+    Bad "Codex 未识别"
+    Say "  修复命令（复制这一段运行）："
+    Say '  $bin="$env:LOCALAPPDATA\Programs\OpenAI\Codex\bin"; if(Test-Path "$bin\codex.exe"){ $env:Path="$bin;$env:Path"; codex --version } else { irm https://chatgpt.com/codex/install.ps1 | iex }'
+  }
+  if(Has 'hermes'){ Ok "Hermes 可用：$(hermes --version 2>$null | Select-Object -First 1)" } else { Bad "Hermes 未识别" }
+  if(Has 'lark-cli'){ Ok "飞书 CLI 可用：$(lark-cli --version 2>$null | Select-Object -First 1)" } else { Bad "飞书 CLI 未识别" }
+}
+
 # ---------- 主流程 ----------
 function Banner {
   Say "============================================"
@@ -418,9 +451,8 @@ function Main {
   Say ""
   if(Ask "进入第二步：登录授权？"){ Auth-Phase }
   Hr; Ok "全部流程结束！"
-  Say "建议：关掉这个 PowerShell 窗口，重新开一个，粘贴下面确认都能用："
-  Say "  claude --version; codex --version; hermes --version; lark-cli --version"
-  Say "任何一个报错，截图发到群里。祝大课顺利！"
+  Show-FinalCheck
+  Say "建议：关掉这个 PowerShell 窗口，重新开一个；如果上面仍有红色报错，截图发到群里。祝大课顺利！"
 }
 
 Main
