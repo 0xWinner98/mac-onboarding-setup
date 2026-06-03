@@ -31,6 +31,10 @@ step(){ printf "\n${BOLD}${BLU}▶ %s${RST}\n" "$*"; }
 # ---------- 工具函数 ----------
 has_cmd(){ command -v "$1" >/dev/null 2>&1; }
 
+# 检测 Xcode 命令行工具(CLT)是否真装好。macOS 的 git 是 CLT 的占位命令——
+# 没装 CLT 时 command -v git 也成功，但真跑 git 会报 xcrun error。必须实跑校验。
+clt_ok(){ xcode-select -p >/dev/null 2>&1 && git --version >/dev/null 2>&1; }
+
 # 把 ~/.local/bin 加入当前会话 PATH（官方脚本多装到这里）
 ensure_local_bin(){
   case ":$PATH:" in
@@ -98,7 +102,7 @@ detect(){
   fi
   say "${DIM}  ── 下面是依赖，不用单独管 ──${RST}"
   has_cmd node && ok "Node.js —— $(node -v)" || warn "Node.js —— 没有（装飞书 CLI 时自动装）"
-  has_cmd git  && ok "Git —— 已就绪"         || warn "Git —— 没有（装 Hermes 时会提示装）"
+  clt_ok && ok "开发者命令行工具 / Git —— 已就绪" || warn "开发者命令行工具(CLT) —— 没装好（git 跑不起来；装 Hermes 前会引导 xcode-select --install）"
 }
 
 # ---------- 工作区（知识库文件夹）----------
@@ -159,10 +163,11 @@ do_codex(){
 do_hermes(){
   step "Hermes Agent —— 能成长的 AI 助手"
   if has_cmd hermes; then ok "已安装：$(hermes --version 2>/dev/null | head -1)"; SKIPPED+=("Hermes"); return; fi
-  if ! has_cmd git; then
-    warn "Hermes 需要 Git。macOS 会弹窗让你装「命令行开发者工具」，点【安装】，装完再重跑本脚本。"
+  if ! clt_ok; then
+    warn "Hermes 需要「Xcode 命令行工具(CLT)」，你这台还没装好——git 看着有、实际跑不起来（会报 xcrun error）。"
+    say "  ${DIM}马上弹一个系统窗口，点【安装】，装完（约几分钟、需联网）再重跑本脚本。${RST}"
     xcode-select --install 2>/dev/null || true
-    FAILED+=("Hermes（缺 Git，装完命令行工具后重跑）"); return
+    FAILED+=("Hermes（缺 Xcode 命令行工具 → 弹窗点【安装】，装完重跑）"); return
   fi
   say "将运行官方安装脚本（仅需 Git，会自动装 Python / Node 等依赖，耗时几分钟）："
   say "  ${DIM}curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash${RST}"
