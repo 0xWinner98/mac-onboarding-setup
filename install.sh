@@ -30,6 +30,8 @@ step(){ printf "\n${BOLD}${BLU}▶ %s${RST}\n" "$*"; }
 
 # ---------- 工具函数 ----------
 has_cmd(){ command -v "$1" >/dev/null 2>&1; }
+hermes_version(){ hermes --version 2>/dev/null | head -1; }
+hermes_ok(){ [ -n "$(hermes_version)" ]; }
 
 # 检测 Xcode 命令行工具(CLT)是否真装好。macOS 的 git 是 CLT 的占位命令——
 # 没装 CLT 时 command -v git 也成功，但真跑 git 会报 xcrun error。必须实跑校验。
@@ -39,14 +41,20 @@ clt_ok(){ xcode-select -p >/dev/null 2>&1 && git --version >/dev/null 2>&1; }
 node_ok(){ node -v >/dev/null 2>&1 && npm -v >/dev/null 2>&1; }
 
 # 是否所有必备工具都已装齐（全装齐就恭喜跳过，不再走安装流程）
-all_installed(){ { claude --version >/dev/null 2>&1 || [ -d "/Applications/Claude.app" ]; } && codex --version >/dev/null 2>&1 && hermes --version >/dev/null 2>&1 && lark-cli --version >/dev/null 2>&1 && node_ok && [ -d /Applications/Obsidian.app ]; }
+all_installed(){ { claude --version >/dev/null 2>&1 || [ -d "/Applications/Claude.app" ]; } && codex --version >/dev/null 2>&1 && hermes_ok && lark-cli --version >/dev/null 2>&1 && node_ok && [ -d /Applications/Obsidian.app ]; }
 
-# 把 ~/.local/bin 加入当前会话 PATH（官方脚本多装到这里）
+# 把 ~/.local/bin 加入当前会话和新开的 zsh/bash（官方脚本多装到这里）
 ensure_local_bin(){
   case ":$PATH:" in
     *":$HOME/.local/bin:"*) ;;
     *) export PATH="$HOME/.local/bin:$PATH" ;;
   esac
+  local rc line
+  line='export PATH="$HOME/.local/bin:$PATH"  # 航海家脚本：本地命令'
+  for rc in "$HOME/.zshrc" "$HOME/.bash_profile"; do
+    [ -e "$rc" ] || touch "$rc" 2>/dev/null || continue
+    grep -q '\.local/bin' "$rc" 2>/dev/null || printf '\n%s\n' "$line" >> "$rc"
+  done
 }
 
 # 询问：回车=继续 / s=跳过(返回1) / q=退出整个脚本
@@ -94,7 +102,7 @@ detect(){
   say "${BOLD}  ▸ 命令行工具（CLI）${RST}"
   has_cmd claude   && ok "Claude Code (CLI) —— $(claude --version 2>/dev/null | head -1)"   || err "Claude Code (CLI) —— 未装"
   has_cmd codex    && ok "Codex (CLI) —— $(codex --version 2>/dev/null | head -1)"          || err "Codex (CLI) —— 未装"
-  has_cmd hermes   && ok "Hermes (CLI) —— $(hermes --version 2>/dev/null | head -1)"        || err "Hermes (CLI) —— 未装"
+  hermes_ok        && ok "Hermes (CLI) —— $(hermes_version)"                                 || err "Hermes (CLI) —— 未装"
   has_cmd lark-cli && ok "飞书 CLI —— $(lark-cli --version 2>/dev/null | head -1)"          || err "飞书 CLI —— 未装"
   say "${BOLD}  ▸ 桌面 App / 知识库${RST}"
   [ -d /Applications/Obsidian.app ] && ok "Obsidian —— 已装" || err "Obsidian —— 未装"
@@ -225,7 +233,7 @@ do_codex(){
 
 do_hermes(){
   step "Hermes Agent —— 能成长的 AI 助手"
-  if has_cmd hermes; then ok "已安装：$(hermes --version 2>/dev/null | head -1)"; SKIPPED+=("Hermes"); return; fi
+  if hermes_ok; then ok "已安装：$(hermes_version)"; SKIPPED+=("Hermes"); return; fi
   if ! clt_ok; then
     warn "命令行 Hermes 需要 Xcode 命令行工具，你这台还没装好。"
     say "  ${DIM}更省事：直接装 Hermes 桌面 App（自带运行环境、不用 CLT），后面「图形界面」步骤会引导你装；想用命令行版就先把 Xcode 工具装好再重跑脚本。${RST}"
@@ -239,8 +247,8 @@ do_hermes(){
   say "${YLW}但卡在某一步（如 Installing managed uv）超过 10 分钟完全不动 = 网络/Cloudflare 拦了下载：按 Ctrl+C 中断，先跳过 Hermes（Claude Code/Codex 是主力、够用），换干净网络/IP 再单独装。${RST}"
   if curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash; then
     ensure_local_bin
-    if has_cmd hermes; then ok "Hermes 安装成功：$(hermes --version 2>/dev/null | head -1)"; INSTALLED+=("Hermes")
-    else warn "装好了，但当前窗口还没刷新命令（结束后重开终端即可）"; INSTALLED+=("Hermes（需重开终端）"); fi
+    if hermes_ok; then ok "Hermes 安装成功：$(hermes_version)"; INSTALLED+=("Hermes")
+    else err "Hermes 官方脚本跑完了，但 hermes --version 仍不能用。先跳过 Hermes，不影响 Claude Code / Codex 主流程。"; FAILED+=("Hermes（命令不可用）"); fi
   else err "Hermes 安装失败。稍后重试，或截图发到群里。"; FAILED+=("Hermes"); fi
 }
 
@@ -367,7 +375,7 @@ auth_phase(){
     ask_continue "现在配置飞书 CLI？" && { lark-cli config init </dev/tty; lark-cli auth login </dev/tty || warn "授权没完成，稍后可手动运行 lark-cli auth login"; }
   fi
 
-  if has_cmd hermes; then
+  if hermes_ok; then
     step "3) Hermes —— 装好就行，先不用配"
     ok "Hermes 命令行已就绪（hermes --version 能看到版本就成）。"
     say "  ${DIM}今晚不用急着选模型 / 订阅——那一步等你了解后再弄，免得不懂时误操作。${RST}"
@@ -453,7 +461,7 @@ do_clients(){
   say "${BOLD}4) Hermes 桌面 App${RST}（图形界面，比命令行友好；和命令行 Hermes 共享同一份配置）"
   if [ -d "/Applications/Hermes.app" ]; then
     ok "Hermes 桌面 App 已安装"
-  elif has_cmd hermes; then
+  elif hermes_ok; then
     say "  你已装命令行 Hermes，${BOLD}最省事${RST}：用官方命令 ${BOLD}hermes desktop${RST} 自动构建并打开桌面 App（首次几分钟）。"
     if ask_continue "现在后台构建并打开 Hermes 桌面 App？（后台跑、不打断后面流程，几分钟后 App 自动打开）"; then
       nohup hermes desktop >/tmp/hermes-desktop-build.log 2>&1 &
