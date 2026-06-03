@@ -43,17 +43,18 @@ node_ok(){ node -v >/dev/null 2>&1 && npm -v >/dev/null 2>&1; }
 # 是否课程主力命令行工具都已装齐：这里不再卡 Obsidian / 桌面 App，避免 CLI 全绿却继续问安装。
 all_installed(){ { claude --version >/dev/null 2>&1 || [ -d "/Applications/Claude.app" ]; } && codex --version >/dev/null 2>&1 && hermes_ok && lark-cli --version >/dev/null 2>&1 && node_ok; }
 
-# 把 ~/.local/bin 加入当前会话和新开的 zsh/bash（官方脚本多装到这里）
-ensure_local_bin(){
+# 把命令目录加入当前会话和新开的 zsh/bash。
+add_shell_path_entry(){
+  local dir="$1" label="${2:-命令目录}" rc line
+  [ -d "$dir" ] || return 1
   case ":$PATH:" in
-    *":$HOME/.local/bin:"*) ;;
-    *) export PATH="$HOME/.local/bin:$PATH" ;;
+    *":$dir:"*) ;;
+    *) export PATH="$dir:$PATH" ;;
   esac
-  local rc line
-  line='export PATH="$HOME/.local/bin:$PATH"  # 航海家脚本：本地命令'
+  line="export PATH=\"$dir:\$PATH\"  # 航海家脚本：$label"
   for rc in "$HOME/.zshrc" "$HOME/.bash_profile"; do
     [ -e "$rc" ] || touch "$rc" 2>/dev/null || continue
-    grep -q '\.local/bin' "$rc" 2>/dev/null || printf '\n%s\n' "$line" >> "$rc"
+    grep -qF "$dir" "$rc" 2>/dev/null || printf '\n%s\n' "$line" >> "$rc"
   done
 }
 
@@ -68,6 +69,59 @@ ask_continue(){
     q|Q) say ""; say "已退出。随时可以重新运行，已装好的会自动跳过。"; exit 0 ;;
     *) return 0 ;;
   esac
+}
+
+# 把 ~/.local/bin 加入当前会话和新开的 zsh/bash（官方脚本多装到这里）
+ensure_local_bin(){ add_shell_path_entry "$HOME/.local/bin" "本地命令"; }
+
+latest_local_node_bin(){
+  local dir
+  for dir in "$HOME"/.local/node-*/bin; do
+    [ -x "$dir/node" ] && { printf '%s\n' "$dir"; return 0; }
+  done
+  return 1
+}
+
+npm_global_bin(){
+  local prefix
+  prefix=$(npm prefix -g 2>/dev/null || npm config get prefix 2>/dev/null)
+  [ -n "$prefix" ] && printf '%s\n' "$prefix/bin"
+}
+
+repair_path_for_tool(){
+  local display="$1" cmd="$2" dir="$3" file="${4:-$2}"
+  if has_cmd "$cmd"; then
+    [ "$cmd" != "hermes" ] || hermes_ok
+    return $?
+  fi
+  [ -n "$dir" ] && [ -e "$dir/$file" ] || return 1
+  warn "检测到 $display 本体已安装在：$dir"
+  warn "但当前终端找不到「$cmd」命令，说明 PATH（命令查找目录）缺少这一项。"
+  if ask_continue "按回车配置 PATH，让现在和新开的终端都能找到 $cmd？"; then
+    add_shell_path_entry "$dir" "$display"
+    if has_cmd "$cmd"; then
+      if [ "$cmd" != "hermes" ] || hermes_ok; then
+        ok "$display 环境已补好：$cmd 可用了"
+        return 0
+      fi
+    fi
+    warn "$display 的 PATH 已写入，但当前窗口仍没识别；关掉终端重开后再试 $cmd --version。"
+  fi
+  return 1
+}
+
+repair_path_if_body_found(){
+  local touched="" node_dir npm_bin
+  node_dir=$(latest_local_node_bin)
+  if ! node_ok && [ -n "$node_dir" ]; then repair_path_for_tool "Node.js / npm" node "$node_dir" node && touched=1; fi
+
+  if ! has_cmd claude; then repair_path_for_tool "Claude Code (CLI)" claude "$HOME/.local/bin" claude && touched=1; fi
+  if ! has_cmd codex; then repair_path_for_tool "Codex (CLI)" codex "$HOME/.local/bin" codex && touched=1; fi
+  if ! hermes_ok; then repair_path_for_tool "Hermes (CLI)" hermes "$HOME/.local/bin" hermes && touched=1; fi
+
+  npm_bin=$(npm_global_bin)
+  if ! has_cmd lark-cli && [ -n "$npm_bin" ]; then repair_path_for_tool "飞书 CLI" lark-cli "$npm_bin" lark-cli && touched=1; fi
+  [ -z "$touched" ] || hr
 }
 
 # ---------- 环境检测（芯片 / macOS 版本）----------
@@ -266,9 +320,7 @@ install_node(){
   tar -xzf /tmp/node.tar.gz -C "$HOME/.local" 2>/dev/null || { rm -f /tmp/node.tar.gz; return 1; }
   rm -f /tmp/node.tar.gz
   dir="$HOME/.local/node-$ver-$a/bin"
-  export PATH="$dir:$PATH"
-  local rc="$HOME/.zshrc"; [ "$(basename "${SHELL:-/bin/zsh}")" = "bash" ] && rc="$HOME/.bash_profile"
-  grep -q "node-$ver-$a/bin" "$rc" 2>/dev/null || printf '\nexport PATH="%s:$PATH"  # 航海家脚本：Node\n' "$dir" >> "$rc"
+  add_shell_path_entry "$dir" "Node"
   has_cmd node && { ok "Node 安装成功：$(node -v)"; return 0; }
   return 1
 }
@@ -287,6 +339,7 @@ do_larkcli(){
   say "将通过 npm 安装：${DIM}npm install -g @larksuite/cli${RST}"
   ask_continue "现在安装飞书 CLI？" || { SKIPPED+=("飞书 CLI"); return; }
   if npm install -g @larksuite/cli; then
+    repair_path_if_body_found
     if has_cmd lark-cli; then ok "飞书 CLI 安装成功：$(lark-cli --version 2>/dev/null | head -1)"; INSTALLED+=("飞书 CLI")
     else warn "装好了，但当前窗口还没刷新命令（结束后重开终端即可）"; INSTALLED+=("飞书 CLI（需重开终端）"); fi
   else err "飞书 CLI 安装失败（可能是 npm 权限）。截图发到群里。"; FAILED+=("飞书 CLI"); fi
@@ -498,7 +551,6 @@ banner(){
 }
 
 main(){
-  ensure_local_bin
   if [ "${1:-}" = "--check" ]; then banner; check_network; detect; echo; say "（这是只检测模式，没有安装任何东西）"; exit 0; fi
 
   # curl | bash 运行时仍需交互授权，必须有可用的终端
@@ -517,6 +569,7 @@ main(){
   say "按提示${BOLD}回车${RST}即可；不想装某个就输 ${BOLD}s${RST} 跳过；想退出输 ${BOLD}q${RST}。"
   say "${DIM}脚本不会动你的密码，所有登录都在官方页面由你自己完成。${RST}"
   check_network
+  repair_path_if_body_found
   detect
   if all_installed; then
     hr; ok "${BOLD}恭喜！大课主力命令行工具已经装好了，不用重新安装 🎉${RST}"
@@ -536,6 +589,7 @@ main(){
   do_larkcli
   do_obsidian
   do_clients
+  repair_path_if_body_found
   summary
 
   echo

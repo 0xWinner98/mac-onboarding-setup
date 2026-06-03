@@ -28,21 +28,52 @@ $script:INSTALLED=@(); $script:SKIPPED=@(); $script:FAILED=@()
 function Has($cmd){ return [bool](Get-Command $cmd -ErrorAction SilentlyContinue) }
 # Node 是否真可用：node 和 npm 都要在（飞书 CLI 要 npm）
 function Node-Ok { return ((Has 'node') -and (Has 'npm')) }
+function Path-HasEntry($pathValue, $dir){
+  if([string]::IsNullOrWhiteSpace($pathValue) -or [string]::IsNullOrWhiteSpace($dir)){ return $false }
+  $trim = @([char]92,[char]47)
+  $needle = $dir.Trim().TrimEnd($trim)
+  foreach($p in ($pathValue -split ';')){
+    if($p.Trim().TrimEnd($trim) -ieq $needle){ return $true }
+  }
+  return $false
+}
+function Get-UserPathRaw {
+  try {
+    $v = (Get-ItemProperty -Path "HKCU:\Environment" -Name Path -ErrorAction Stop).Path
+    if($null -ne $v){ return "$v" }
+  } catch {}
+  return [System.Environment]::GetEnvironmentVariable("Path","User")
+}
+function Set-UserPathRaw($value){
+  try {
+    if(Get-ItemProperty -Path "HKCU:\Environment" -Name Path -ErrorAction SilentlyContinue){
+      Set-ItemProperty -Path "HKCU:\Environment" -Name Path -Value $value -ErrorAction Stop
+    } else {
+      New-ItemProperty -Path "HKCU:\Environment" -Name Path -Value $value -PropertyType ExpandString -Force -ErrorAction Stop | Out-Null
+    }
+  } catch {
+    [System.Environment]::SetEnvironmentVariable("Path",$value,"User")
+  }
+}
+function Add-UserPathEntry($dir){
+  if([string]::IsNullOrWhiteSpace($dir) -or -not (Test-Path $dir)){ return $false }
+  if(-not (Path-HasEntry $env:Path $dir)){ $env:Path = "$dir;$env:Path" }
+  $u=Get-UserPathRaw
+  if(-not (Path-HasEntry $u $dir)){
+    if([string]::IsNullOrWhiteSpace($u)){ Set-UserPathRaw $dir }
+    else { Set-UserPathRaw "$dir;$u" }
+  }
+  return $true
+}
 # Codex 官方 Windows 安装器默认放这里；有时装好了但当前 PowerShell PATH 没刷新。
 function Codex-BinDir { return (Join-Path $env:LOCALAPPDATA "Programs\OpenAI\Codex\bin") }
 function Ensure-CodexPath {
   $bin = Codex-BinDir
   $exe = Join-Path $bin "codex.exe"
   if(-not (Test-Path $exe)){ return $false }
-  if((";$env:Path;") -notlike "*;$bin;*"){ $env:Path = "$bin;$env:Path" }
-  $u=[System.Environment]::GetEnvironmentVariable("Path","User")
-  if((";$u;") -notlike "*;$bin;*"){
-    if([string]::IsNullOrWhiteSpace($u)){ [System.Environment]::SetEnvironmentVariable("Path",$bin,"User") }
-    else { [System.Environment]::SetEnvironmentVariable("Path","$bin;$u","User") }
-  }
-  return $true
+  return (Add-UserPathEntry $bin)
 }
-function Codex-Ok { if(Has 'codex'){ return $true }; return (Ensure-CodexPath -and (Has 'codex')) }
+function Codex-Ok { return (Has 'codex') }
 function Codex-InstallerHasOSArchitecture {
   try {
     $t = [System.Runtime.InteropServices.RuntimeInformation]
@@ -118,6 +149,87 @@ function Ask($prompt){
   if($ans -ieq 's'){ return $false }
   if($ans -ieq 'q'){ Say ""; Say "已退出。随时可重新运行，已装好的会自动跳过。"; exit 0 }
   return $true
+}
+
+function Existing-CommandFile($dirs, $files){
+  foreach($dir in $dirs){
+    if([string]::IsNullOrWhiteSpace($dir)){ continue }
+    foreach($file in $files){
+      $path = Join-Path $dir $file
+      if(Test-Path $path){ return $path }
+    }
+  }
+  return $null
+}
+function Npm-BinDirs {
+  $dirs = @()
+  if(Has 'npm'){
+    try {
+      $prefix = (& npm config get prefix 2>$null | Select-Object -First 1)
+      if(-not [string]::IsNullOrWhiteSpace($prefix)){ $dirs += $prefix.Trim() }
+    } catch {}
+  }
+  if(-not [string]::IsNullOrWhiteSpace($env:APPDATA)){ $dirs += (Join-Path $env:APPDATA "npm") }
+  return ($dirs | Where-Object { -not [string]::IsNullOrWhiteSpace($_) } | Select-Object -Unique)
+}
+function Node-BinDirs {
+  $dirs = @()
+  if(-not [string]::IsNullOrWhiteSpace($env:ProgramFiles)){ $dirs += (Join-Path $env:ProgramFiles "nodejs") }
+  $pf86=[System.Environment]::GetEnvironmentVariable("ProgramFiles(x86)")
+  if(-not [string]::IsNullOrWhiteSpace($pf86)){ $dirs += (Join-Path $pf86 "nodejs") }
+  return ($dirs | Select-Object -Unique)
+}
+function Git-BinDirs {
+  $dirs = @()
+  if(-not [string]::IsNullOrWhiteSpace($env:ProgramFiles)){
+    $dirs += (Join-Path $env:ProgramFiles "Git\cmd")
+    $dirs += (Join-Path $env:ProgramFiles "Git\bin")
+  }
+  if(-not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)){ $dirs += (Join-Path $env:LOCALAPPDATA "Programs\Git\cmd") }
+  return ($dirs | Select-Object -Unique)
+}
+function Hermes-BinDir { return (Join-Path $env:LOCALAPPDATA "hermes\hermes-agent\venv\Scripts") }
+function Claude-BinDirs {
+  $dirs = @()
+  if(-not [string]::IsNullOrWhiteSpace($env:USERPROFILE)){
+    $dirs += (Join-Path $env:USERPROFILE ".claude\bin")
+    $dirs += (Join-Path $env:USERPROFILE ".local\bin")
+  }
+  if(-not [string]::IsNullOrWhiteSpace($env:LOCALAPPDATA)){
+    $dirs += (Join-Path $env:LOCALAPPDATA "Programs\Claude Code\bin")
+    $dirs += (Join-Path $env:LOCALAPPDATA "AnthropicClaude\bin")
+  }
+  return ($dirs | Select-Object -Unique)
+}
+function Repair-PathForTool($display, $command, $dirs, $files){
+  if(Has $command){ return $null }
+  $found = Existing-CommandFile $dirs $files
+  if(-not $found){ return $null }
+  $dir = Split-Path -Parent $found
+  Warn "检测到 $display 本体已安装在：$dir"
+  Warn "但当前 PowerShell 找不到「$command」命令，说明 PATH（命令查找目录）缺少这一项。"
+  if(-not (Ask "按回车配置 PATH，让现在和新开的 PowerShell 都能找到 $command？")){ return $false }
+  Add-UserPathEntry $dir | Out-Null
+  Refresh-Path
+  if(Has $command){ Ok "$display 环境已补好：$command 可用了"; return $true }
+  Warn "$display 的 PATH 已写入，但当前窗口仍没识别；关掉 PowerShell 重开后再试 $command --version。"
+  return $false
+}
+function Ensure-PathRepairs {
+  $touched = $false
+  foreach($spec in @(
+    @{d='Claude Code (CLI)'; c='claude'; dirs=(Claude-BinDirs); files=@('claude.exe','claude.cmd')},
+    @{d='Codex (CLI)'; c='codex'; dirs=@(Codex-BinDir); files=@('codex.exe')},
+    @{d='Hermes (CLI)'; c='hermes'; dirs=@(Hermes-BinDir); files=@('hermes.exe','hermes.cmd')},
+    @{d='Node.js / npm'; c='node'; dirs=(Node-BinDirs); files=@('node.exe')},
+    @{d='npm'; c='npm'; dirs=(Node-BinDirs); files=@('npm.cmd')},
+    @{d='Git'; c='git'; dirs=(Git-BinDirs); files=@('git.exe')},
+    @{d='飞书 CLI'; c='lark-cli'; dirs=(Npm-BinDirs); files=@('lark-cli.cmd','lark-cli.ps1')}
+  )){
+    $r = Repair-PathForTool $spec.d $spec.c $spec.dirs $spec.files
+    if($null -ne $r){ $touched = $true }
+  }
+  if($touched){ Hr }
 }
 
 # ---------- 环境检测 ----------
@@ -297,6 +409,7 @@ function Do-Hermes {
   $ok=$true
   try { Invoke-Expression (Invoke-RestMethod https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.ps1 -ErrorAction Stop) } catch { $ok=$false; Warn "安装过程报错：$_" }
   Refresh-Path
+  Add-UserPathEntry (Hermes-BinDir) | Out-Null
   if(Has 'hermes'){ Ok "Hermes 安装成功"; $script:INSTALLED+="Hermes" }
   elseif(-not $ok){ Bad "Hermes 安装失败（多半网络），截图发到群里。"; $script:FAILED+="Hermes（安装失败）" }
   else { Warn "装完了但当前窗口没认到命令（结束后重开 PowerShell）"; $script:INSTALLED+="Hermes（需重开终端）" }
@@ -307,6 +420,7 @@ function Install-Node {
   Warn "飞书 CLI 需要 Node.js，没检测到，正在用 winget 自动装……"
   Winget-Install 'OpenJS.NodeJS.LTS' 'Node.js LTS' | Out-Null
   Refresh-Path
+  foreach($dir in (Node-BinDirs)){ Add-UserPathEntry $dir | Out-Null }
   if(Has 'node'){ Ok "Node 安装成功：$(node -v)"; return $true }
   Warn "Node 装了但当前窗口还没刷新到（可能需重开 PowerShell）。"
   return (Has 'node')
@@ -320,6 +434,7 @@ function Ensure-BaseDeps {
     Warn "没检测到 Git，正在用 winget 自动装（Claude Code / Hermes 都可能要用）……"
     Winget-Install 'Git.Git' 'Git for Windows' | Out-Null
     Refresh-Path
+    foreach($dir in (Git-BinDirs)){ Add-UserPathEntry $dir | Out-Null }
     if(Has 'git'){ Ok "Git 安装成功" } else { Warn "Git 没装上（可能需重开 PowerShell）；后续报缺 Git 就手动装 https://gitforwindows.org" }
   }
   if(Node-Ok){ Ok "Node.js / npm —— 已就绪（$(node -v)）" } else { Install-Node | Out-Null; if(-not (Node-Ok)){ Warn "Node 没装好（飞书 CLI 那步会再试）"; $script:FAILED+="Node.js（飞书 CLI 依赖）" } }
@@ -339,6 +454,7 @@ function Do-Larkcli {
   cmd /c "npm install -g @larksuite/cli@latest"
   $rc=$LASTEXITCODE
   Refresh-Path
+  foreach($dir in (Npm-BinDirs)){ Add-UserPathEntry $dir | Out-Null }
   if(Has 'lark-cli'){ Ok "飞书 CLI 安装成功"; $script:INSTALLED+="飞书 CLI" }
   elseif($rc -ne 0){ Bad "飞书 CLI 安装失败（npm 返回 $rc，多半网络/权限），截图发到群里。"; $script:FAILED+="飞书 CLI（安装失败）" }
   else { Warn "装完了但当前窗口没认到命令（结束后重开 PowerShell）"; $script:INSTALLED+="飞书 CLI（需重开终端）" }
@@ -515,6 +631,7 @@ function Main {
   Say "工具都从各家官方源下载，脚本里不含任何密钥。"
   Say "按提示回车即可；不想装某个就输 s 跳过；想退出输 q。"
   Check-Network
+  Ensure-PathRepairs
   Detect
   if(All-Installed){
     Repair-CodexSandboxSetup | Out-Null
@@ -534,6 +651,7 @@ function Main {
   Do-Larkcli
   Do-Obsidian
   Do-Clients
+  Ensure-PathRepairs
   Summary
   Say ""
   if(Ask "进入第二步：登录授权？"){ Auth-Phase }
