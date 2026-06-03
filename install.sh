@@ -424,12 +424,18 @@ do_clients(){
     say "  ${DIM}（不想装 App 也行：命令行 Codex 或 Obsidian 的 Claudian 插件一样能用 Codex）${RST}"
   fi
 
-  # 4) Hermes 桌面 App —— CLI 的图形外壳，比命令行友好（官方 CDN 下载，绝不走 brew）
+  # 4) Hermes 桌面 App —— CLI 的图形外壳，比命令行友好
   echo
-  if [ -d "/Applications/Hermes.app" ]; then
+  say "${BOLD}4) Hermes 桌面 App${RST}（图形界面，比命令行友好；和命令行 Hermes 共享同一份配置）"
+  if has_cmd hermes; then
+    say "  你已装命令行 Hermes，${BOLD}最省事${RST}：跑一条 ${BOLD}hermes desktop${RST}，自动装依赖、构建并打开桌面 App（首次几分钟）。"
+    if ask_continue "现在跑 hermes desktop 装并打开桌面 App？（首次较慢，构建完会自动开 App，别关窗口）"; then
+      say "${DIM}正在构建并启动，首次几分钟、别关窗口……App 打开后可以关掉这个终端。${RST}"
+      hermes desktop </dev/tty || { warn "hermes desktop 没成功（构建依赖可能缺），改用官方安装包："; say "  ${CYN}https://hermes-agent.nousresearch.com/desktop${RST}"; has_cmd open && open "https://hermes-agent.nousresearch.com/desktop" 2>/dev/null; }
+    fi
+  elif [ -d "/Applications/Hermes.app" ]; then
     ok "Hermes 桌面 App 已安装"
   else
-    say "${BOLD}4) Hermes 桌面 App${RST}（图形界面，比命令行友好；和命令行 Hermes 共享同一份配置）"
     if ask_continue "下载并打开 Hermes 桌面 App 安装包？"; then
       local dmg="/tmp/Hermes-Setup.dmg"
       say "${DIM}正在下载（官方源，约 7MB）……${RST}"

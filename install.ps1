@@ -338,7 +338,12 @@ function Do-Clients {
 
   Say ""
   Say "4) Hermes 桌面 App（图形界面，比命令行友好；和命令行 Hermes 共享同一份配置）"
-  if(Ask "下载并运行 Hermes 桌面 App 安装包？"){
+  if(Has 'hermes'){
+    Say "  你已装命令行 Hermes，最省事：跑一条 hermes desktop 自动装依赖、构建并打开桌面 App（首次几分钟）。"
+    if(Ask "现在跑 hermes desktop 装并打开桌面 App？（首次较慢，别关窗口）"){
+      try { hermes desktop } catch { Warn "hermes desktop 没成功，改用安装包：https://hermes-agent.nousresearch.com/desktop"; Start-Process "https://hermes-agent.nousresearch.com/desktop" 2>$null }
+    }
+  } elseif(Ask "下载并运行 Hermes 桌面 App 安装包？"){
     $exe="$env:TEMP\Hermes-Setup.exe"
     Say "  正在下载（官方源，约 8MB）……"
     try {
