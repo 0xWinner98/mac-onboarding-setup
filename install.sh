@@ -35,6 +35,12 @@ has_cmd(){ command -v "$1" >/dev/null 2>&1; }
 # 没装 CLT 时 command -v git 也成功，但真跑 git 会报 xcrun error。必须实跑校验。
 clt_ok(){ xcode-select -p >/dev/null 2>&1 && git --version >/dev/null 2>&1; }
 
+# Node 是否真可用：node 和 npm 都得能跑（飞书 CLI 要 npm，光有 node 不够）
+node_ok(){ node -v >/dev/null 2>&1 && npm -v >/dev/null 2>&1; }
+
+# 是否所有必备工具都已装齐（全装齐就恭喜跳过，不再走安装流程）
+all_installed(){ has_cmd claude && has_cmd codex && has_cmd hermes && has_cmd lark-cli && [ -d /Applications/Obsidian.app ]; }
+
 # 把 ~/.local/bin 加入当前会话 PATH（官方脚本多装到这里）
 ensure_local_bin(){
   case ":$PATH:" in
@@ -101,7 +107,7 @@ detect(){
     warn "你的 macOS <12：命令行 Codex 可能装不了（官方要 12+）——可改用 Codex 桌面 App（Apple / Intel 都有版本）或 Obsidian 的 Claudian 插件。"
   fi
   say "${DIM}  ── 下面是依赖，不用单独管 ──${RST}"
-  has_cmd node && ok "Node.js —— $(node -v)" || warn "Node.js —— 没有（装飞书 CLI 时自动装）"
+  node_ok && ok "Node.js / npm —— $(node -v)" || warn "Node.js / npm —— 没装好（装飞书 CLI 时自动装）"
   clt_ok && ok "开发者命令行工具 / Git —— 已就绪" || warn "开发者命令行工具(CLT) —— 没装好（git 跑不起来；装 Hermes 前会引导 xcode-select --install）"
 }
 
@@ -135,18 +141,18 @@ ensure_base_deps(){
         printf "${RST}\n"; err "等了 10 分钟还没装好（可能没点【安装】或网络慢）。"
         say "  ${DIM}装完 CLT 后重跑本脚本即可；或现在先跳过（Hermes 这步会失败）。${RST}"
         FAILED+=("Xcode 命令行工具（装完后重跑脚本）")
-        ask_continue "先跳过、继续装其它工具？" || exit 0
+        warn "先跳过 Xcode 工具，继续装其它（只有 Hermes 受影响；装完 CLT 重跑即可）。"
         return
       fi
     done
     printf "${RST}\n"; ok "Xcode 命令行工具已就绪，git 可用了"; INSTALLED+=("Xcode 命令行工具")
   fi
   # 2) Node.js：提供 npm（飞书 CLI 必需）
-  if has_cmd node; then
-    ok "Node.js —— 已就绪（$(node -v)）"
+  if node_ok; then
+    ok "Node.js / npm —— 已就绪（$(node -v)）"
   else
     say "${DIM}装 Node.js（官方包，免 brew、免密码）……${RST}"
-    if install_node; then INSTALLED+=("Node.js"); else warn "Node 自动装失败（多半网络）；装飞书 CLI 时会再试一次。"; fi
+    if install_node && node_ok; then INSTALLED+=("Node.js"); else warn "Node 没装好（多半网络）；飞书 CLI 那步会再试，仍不行就装完 Node 重跑。"; FAILED+=("Node.js（飞书 CLI 依赖）"); fi
   fi
   # Python 不用单独装——Hermes 官方脚本会用 uv 自动装 Python 3.11
 }
@@ -191,17 +197,16 @@ do_codex(){
     ensure_local_bin
     if has_cmd codex; then ok "Codex 安装成功：$(codex --version 2>/dev/null | head -1)"; INSTALLED+=("Codex")
     else warn "装好了，但当前窗口还没刷新命令（结束后重开终端即可）"; INSTALLED+=("Codex（需重开终端）"); fi
-  else err "Codex 安装失败（多半是网络）。稍后重试，或截图发小组长。"; FAILED+=("Codex"); fi
+  else err "Codex 安装失败（多半是网络）。稍后重试，或截图发到群里。"; FAILED+=("Codex"); fi
 }
 
 do_hermes(){
   step "Hermes Agent —— 能成长的 AI 助手"
   if has_cmd hermes; then ok "已安装：$(hermes --version 2>/dev/null | head -1)"; SKIPPED+=("Hermes"); return; fi
   if ! clt_ok; then
-    warn "Hermes 需要「Xcode 命令行工具(CLT)」，你这台还没装好——git 看着有、实际跑不起来（会报 xcrun error）。"
-    say "  ${DIM}马上弹一个系统窗口，点【安装】，装完（约几分钟、需联网）再重跑本脚本。${RST}"
-    xcode-select --install 2>/dev/null || true
-    FAILED+=("Hermes（缺 Xcode 命令行工具 → 弹窗点【安装】，装完重跑）"); return
+    warn "命令行 Hermes 需要 Xcode 命令行工具，你这台还没装好。"
+    say "  ${DIM}更省事：直接装 Hermes 桌面 App（自带运行环境、不用 CLT），后面「图形界面」步骤会引导你装；想用命令行版就先把 Xcode 工具装好再重跑脚本。${RST}"
+    SKIPPED+=("Hermes 命令行（缺 CLT → 改用桌面 App / 或装 CLT 重跑）"); return
   fi
   say "将运行官方安装脚本（仅需 Git，会自动装 Python / Node 等依赖，耗时几分钟）："
   say "  ${DIM}curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash${RST}"
@@ -212,7 +217,7 @@ do_hermes(){
     ensure_local_bin
     if has_cmd hermes; then ok "Hermes 安装成功：$(hermes --version 2>/dev/null | head -1)"; INSTALLED+=("Hermes")
     else warn "装好了，但当前窗口还没刷新命令（结束后重开终端即可）"; INSTALLED+=("Hermes（需重开终端）"); fi
-  else err "Hermes 安装失败。稍后重试，或截图发小组长。"; FAILED+=("Hermes"); fi
+  else err "Hermes 安装失败。稍后重试，或截图发到群里。"; FAILED+=("Hermes"); fi
 }
 
 # ---------- Node.js 自动安装（官方包，免 brew/密码/浏览器）----------
@@ -239,7 +244,7 @@ install_node(){
 do_larkcli(){
   step "飞书 CLI —— 让 AI 直接读写你的飞书表格 / 文档"
   if has_cmd lark-cli; then ok "已安装：$(lark-cli --version 2>/dev/null | head -1)"; SKIPPED+=("飞书 CLI"); return; fi
-  if ! has_cmd node; then
+  if ! node_ok; then
     warn "飞书 CLI 需要 Node.js，没检测到，正在自动装（免 brew、免密码）……"
     if ! install_node; then
       err "Node 自动安装失败——多半是网络连不上 nodejs.org（前面连 chatgpt / astral 也失败，就是网络不通）。"
@@ -252,7 +257,7 @@ do_larkcli(){
   if npm install -g @larksuite/cli; then
     if has_cmd lark-cli; then ok "飞书 CLI 安装成功：$(lark-cli --version 2>/dev/null | head -1)"; INSTALLED+=("飞书 CLI")
     else warn "装好了，但当前窗口还没刷新命令（结束后重开终端即可）"; INSTALLED+=("飞书 CLI（需重开终端）"); fi
-  else err "飞书 CLI 安装失败（可能是 npm 权限）。截图发小组长。"; FAILED+=("飞书 CLI"); fi
+  else err "飞书 CLI 安装失败（可能是 npm 权限）。截图发到群里。"; FAILED+=("飞书 CLI"); fi
 }
 
 do_obsidian(){
@@ -373,8 +378,11 @@ auth_phase(){
     if [ "$q3" = "2" ]; then
       say "好的，用${BOLD}第三方中转${RST} —— ${BOLD}CC Switch 一键配置${RST}。下面帮你自动下载官方版本并安装："
       install_ccswitch
-      say "  ${BOLD}配置（在打开的 CC Switch 里）${RST}：点右上角「${BOLD}新建${RST}」→ 填${BOLD}小组长发的中转地址和密钥${RST} → 选中 → 应用。"
-      say "  ${DIM}配好后 Claude Code / Codex / Hermes 都走这个中转。地址和密钥找小组长拿，脚本不预置（避免泄露和封号）。${RST}"
+      say "  ${BOLD}配置（在打开的 CC Switch 里）${RST}：点右上角「${BOLD}新建${RST}」→ 填中转地址和密钥 → 选中 → 应用。"
+      say "  ${DIM}中转地址和密钥自己去这两个靠谱的中转站注册、充值一些先试用（充一两百够用很久）：${RST}"
+      say "    ${CYN}https://aigocode.com/invite/ATR5EXTD${RST}"
+      say "    ${CYN}https://apikey.fun/register?aff=S46XYZ9AKRFM${RST}"
+      say "  ${DIM}配好后 Claude Code / Codex / Hermes 都走这个中转。脚本不预置密钥（避免泄露和封号）。${RST}"
     else
       say "即将运行 ${DIM}claude${RST}，会打开浏览器走官方登录；登录后在里面输入 /exit 退出。"
       ask_continue "现在登录 Claude Code 官方？" && { claude </dev/tty || warn "登录没完成，稍后可手动运行 claude"; }
@@ -406,7 +414,7 @@ do_clients(){
 
   # 3) Codex 桌面 App——Apple Silicon 和 Intel 都有官方版本
   echo
-  if [ -d "/Applications/Codex.app" ]; then
+  if ls -d /Applications/Codex*.app >/dev/null 2>&1; then
     ok "Codex 桌面 App 已安装"
   else
     local cxbuild="Apple Silicon 版"; [ "$ARCH" != "arm64" ] && cxbuild="Intel 版"
@@ -414,6 +422,24 @@ do_clients(){
     say "  你的电脑是 $CHIP，到下载页选 ${BOLD}$cxbuild${RST}，下载后拖进 Applications。"
     ask_continue "打开 Codex App 下载页？（需 ChatGPT 账号）" && { has_cmd open && open "https://developers.openai.com/codex/app" 2>/dev/null; }
     say "  ${DIM}（不想装 App 也行：命令行 Codex 或 Obsidian 的 Claudian 插件一样能用 Codex）${RST}"
+  fi
+
+  # 4) Hermes 桌面 App —— CLI 的图形外壳，比命令行友好（官方 CDN 下载，绝不走 brew）
+  echo
+  if [ -d "/Applications/Hermes.app" ]; then
+    ok "Hermes 桌面 App 已安装"
+  else
+    say "${BOLD}4) Hermes 桌面 App${RST}（图形界面，比命令行友好；和命令行 Hermes 共享同一份配置）"
+    if ask_continue "下载并打开 Hermes 桌面 App 安装包？"; then
+      local dmg="/tmp/Hermes-Setup.dmg"
+      say "${DIM}正在下载（官方源，约 7MB）……${RST}"
+      if curl -fSL -o "$dmg" "https://hermes-assets.nousresearch.com/Hermes-Setup.dmg" 2>/dev/null && [ -s "$dmg" ]; then
+        open "$dmg" 2>/dev/null
+        say "  ${DIM}在弹出的窗口里，把 Hermes 图标拖进「应用程序」就装好了。${RST}"
+      else
+        warn "下载没成功（多半网络），可手动下载：https://hermes-agent.nousresearch.com/desktop"
+      fi
+    fi
   fi
 }
 
@@ -423,7 +449,7 @@ summary(){
   if [ ${#INSTALLED[@]} -gt 0 ]; then ok "本次新装好："; for x in "${INSTALLED[@]}"; do say "    • $x"; done; fi
   if [ ${#SKIPPED[@]}  -gt 0 ]; then say "${DIM}⏭  跳过 / 本来就有：${RST}"; for x in "${SKIPPED[@]}"; do say "    • $x"; done; fi
   if [ ${#FAILED[@]}   -gt 0 ]; then err "还没搞定（需处理）："; for x in "${FAILED[@]}"; do say "    • $x"; done
-    say "  ${YLW}把上面这几行截图发小组长，会帮你看。${RST}"; fi
+    say "  ${YLW}把上面这几行截图发到群里，会帮你看。${RST}"; fi
 }
 
 # ---------- 主流程 ----------
@@ -454,6 +480,13 @@ main(){
   say "${DIM}脚本不会动你的密码，所有登录都在官方页面由你自己完成。${RST}"
   check_network
   detect
+  if all_installed; then
+    hr; ok "${BOLD}恭喜！大课要用的工具你已经全部装好了 🎉${RST}"
+    say "  ${DIM}各工具自带自动更新（claude / codex / hermes 下次启动会自己更新；飞书 CLI 可跑 npm update -g @larksuite/cli）。${RST}"
+    echo
+    ask_continue "直接进入登录 / 授权？（已装好的不用重装）" && auth_phase
+    hr; ok "全部就绪，祝大课顺利 🚀"; exit 0
+  fi
   hr; say "${BOLD}第一步：逐个检查并安装${RST}"; hr
   ask_continue "开始安装流程？" || { say "好的，下次再来。已装好的不会重复装。"; exit 0; }
 
@@ -473,7 +506,7 @@ main(){
   hr; ok "全部流程结束！"
   say "建议：${BOLD}关掉这个终端窗口，重新开一个${RST}，粘贴下面这行确认都能用："
   say "  ${DIM}claude --version; codex --version; hermes --version; lark-cli --version${RST}"
-  say "任何一个报错，截图发小组长。祝大课顺利 🚀"
+  say "任何一个报错，截图发到群里。祝大课顺利 🚀"
 }
 
 main "$@"
