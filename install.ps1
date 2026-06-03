@@ -29,7 +29,7 @@ function Has($cmd){ return [bool](Get-Command $cmd -ErrorAction SilentlyContinue
 # Node 是否真可用：node 和 npm 都要在（飞书 CLI 要 npm）
 function Node-Ok { return ((Has 'node') -and (Has 'npm')) }
 # 是否所有必备工具都已装齐（全装齐就恭喜跳过）
-function All-Installed { return ((Has 'claude') -and (Has 'codex') -and (Has 'hermes') -and (Has 'lark-cli') -and (Pkg-Installed 'Obsidian.Obsidian')) }
+function All-Installed { return ( ((Has 'claude') -or (Pkg-Installed 'Anthropic.Claude')) -and (Has 'codex') -and (Has 'hermes') -and (Has 'lark-cli') -and (Node-Ok) -and (Pkg-Installed 'Obsidian.Obsidian') ) }
 
 function Refresh-Path {
   $m=[System.Environment]::GetEnvironmentVariable("Path","Machine")
@@ -179,7 +179,7 @@ function Do-Hermes {
 }
 
 function Install-Node {
-  if(Has 'node'){ return $true }
+  if(Node-Ok){ return $true }
   Warn "飞书 CLI 需要 Node.js，没检测到，正在用 winget 自动装……"
   Winget-Install 'OpenJS.NodeJS.LTS' 'Node.js LTS' | Out-Null
   Refresh-Path
@@ -339,9 +339,10 @@ function Do-Clients {
   Say ""
   Say "4) Hermes 桌面 App（图形界面，比命令行友好；和命令行 Hermes 共享同一份配置）"
   if(Has 'hermes'){
-    Say "  你已装命令行 Hermes，最省事：跑一条 hermes desktop 自动装依赖、构建并打开桌面 App（首次几分钟）。"
-    if(Ask "现在跑 hermes desktop 装并打开桌面 App？（首次较慢，别关窗口）"){
-      try { hermes desktop } catch { Warn "hermes desktop 没成功，改用安装包：https://hermes-agent.nousresearch.com/desktop"; Start-Process "https://hermes-agent.nousresearch.com/desktop" 2>$null }
+    Say "  你已装命令行 Hermes，最省事：用官方命令 hermes desktop 后台构建并打开桌面 App（首次几分钟）。"
+    if(Ask "现在后台构建并打开 Hermes 桌面 App？（后台跑、不打断后面流程，几分钟后自动打开）"){
+      Start-Process -FilePath "hermes" -ArgumentList "desktop" -WindowStyle Hidden
+      Ok "已在后台开始构建 Hermes 桌面 App（几分钟后自动打开；若没反应可去 https://hermes-agent.nousresearch.com/desktop 下安装包）。"
     }
   } elseif(Ask "下载并运行 Hermes 桌面 App 安装包？"){
     $exe="$env:TEMP\Hermes-Setup.exe"

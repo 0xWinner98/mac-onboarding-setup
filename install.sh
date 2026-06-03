@@ -39,7 +39,7 @@ clt_ok(){ xcode-select -p >/dev/null 2>&1 && git --version >/dev/null 2>&1; }
 node_ok(){ node -v >/dev/null 2>&1 && npm -v >/dev/null 2>&1; }
 
 # 是否所有必备工具都已装齐（全装齐就恭喜跳过，不再走安装流程）
-all_installed(){ has_cmd claude && has_cmd codex && has_cmd hermes && has_cmd lark-cli && [ -d /Applications/Obsidian.app ]; }
+all_installed(){ { claude --version >/dev/null 2>&1 || [ -d "/Applications/Claude.app" ]; } && codex --version >/dev/null 2>&1 && hermes --version >/dev/null 2>&1 && lark-cli --version >/dev/null 2>&1 && node_ok && [ -d /Applications/Obsidian.app ]; }
 
 # 把 ~/.local/bin 加入当前会话 PATH（官方脚本多装到这里）
 ensure_local_bin(){
@@ -222,7 +222,7 @@ do_hermes(){
 
 # ---------- Node.js 自动安装（官方包，免 brew/密码/浏览器）----------
 install_node(){
-  has_cmd node && return 0
+  node_ok && return 0
   local a ver url dir
   [ "$ARCH" = "arm64" ] && a="darwin-arm64" || a="darwin-x64"
   ver=$(curl -fsSL https://nodejs.org/dist/index.json 2>/dev/null | grep -o '"version":"v[0-9.]*"' | head -1 | grep -o 'v[0-9.]*')
@@ -427,14 +427,14 @@ do_clients(){
   # 4) Hermes 桌面 App —— CLI 的图形外壳，比命令行友好
   echo
   say "${BOLD}4) Hermes 桌面 App${RST}（图形界面，比命令行友好；和命令行 Hermes 共享同一份配置）"
-  if has_cmd hermes; then
-    say "  你已装命令行 Hermes，${BOLD}最省事${RST}：跑一条 ${BOLD}hermes desktop${RST}，自动装依赖、构建并打开桌面 App（首次几分钟）。"
-    if ask_continue "现在跑 hermes desktop 装并打开桌面 App？（首次较慢，构建完会自动开 App，别关窗口）"; then
-      say "${DIM}正在构建并启动，首次几分钟、别关窗口……App 打开后可以关掉这个终端。${RST}"
-      hermes desktop </dev/tty || { warn "hermes desktop 没成功（构建依赖可能缺），改用官方安装包："; say "  ${CYN}https://hermes-agent.nousresearch.com/desktop${RST}"; has_cmd open && open "https://hermes-agent.nousresearch.com/desktop" 2>/dev/null; }
-    fi
-  elif [ -d "/Applications/Hermes.app" ]; then
+  if [ -d "/Applications/Hermes.app" ]; then
     ok "Hermes 桌面 App 已安装"
+  elif has_cmd hermes; then
+    say "  你已装命令行 Hermes，${BOLD}最省事${RST}：用官方命令 ${BOLD}hermes desktop${RST} 自动构建并打开桌面 App（首次几分钟）。"
+    if ask_continue "现在后台构建并打开 Hermes 桌面 App？（后台跑、不打断后面流程，几分钟后 App 自动打开）"; then
+      nohup hermes desktop >/tmp/hermes-desktop-build.log 2>&1 &
+      ok "已在后台开始构建 Hermes 桌面 App（几分钟后自动打开；日志 /tmp/hermes-desktop-build.log，没反应可去 https://hermes-agent.nousresearch.com/desktop 下安装包）。"
+    fi
   else
     if ask_continue "下载并打开 Hermes 桌面 App 安装包？"; then
       local dmg="/tmp/Hermes-Setup.dmg"
