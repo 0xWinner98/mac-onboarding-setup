@@ -103,8 +103,8 @@ function Repair-CodexSandboxSetup {
   } catch { return $false }
 }
 function Codex-Ready { return ((Codex-Ok) -and (Repair-CodexSandboxSetup)) }
-# 是否所有必备工具都已装齐（全装齐就恭喜跳过）
-function All-Installed { return ( ((Has 'claude') -or (Pkg-Installed 'Anthropic.Claude')) -and (Codex-Ready) -and (Has 'hermes') -and (Has 'lark-cli') -and (Node-Ok) -and (Pkg-Installed 'Obsidian.Obsidian') ) }
+# 是否课程主力命令行工具都已装齐：这里不再卡 Obsidian / 桌面 App，避免明明 CLI 全绿却继续问安装。
+function All-Installed { return ( ((Has 'claude') -or (Pkg-Installed 'Anthropic.Claude')) -and (Codex-Ok) -and (Has 'hermes') -and (Has 'lark-cli') -and (Node-Ok) ) }
 
 function Refresh-Path {
   $m=[System.Environment]::GetEnvironmentVariable("Path","Machine")
@@ -517,10 +517,11 @@ function Main {
   Check-Network
   Detect
   if(All-Installed){
-    Hr; Ok "恭喜！大课要用的工具你已经全部装好了 🎉"
-    Say "  各工具自带自动更新（claude / codex / hermes 下次启动会自己更新；飞书 CLI 可跑 npm update -g @larksuite/cli）。"
-    Say ""
-    if(Ask "直接进入登录 / 授权？（已装好的不用重装）"){ Auth-Phase }
+    Repair-CodexSandboxSetup | Out-Null
+    Hr; Ok "恭喜！大课主力命令行工具已经装好了，不用重新安装 🎉"
+    Say "  已确认：Claude Code / Codex / Hermes / 飞书 CLI / Node.js。"
+    Say "  Obsidian、Claudian、桌面 App 属于图形界面补充；需要时再单独装，不再卡住主流程。"
+    Show-FinalCheck
     Hr; Ok "全部就绪，祝大课顺利！"; return
   }
   Hr; Say "第一步：逐个检查并安装"; Hr

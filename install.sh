@@ -40,8 +40,8 @@ clt_ok(){ xcode-select -p >/dev/null 2>&1 && git --version >/dev/null 2>&1; }
 # Node 是否真可用：node 和 npm 都得能跑（飞书 CLI 要 npm，光有 node 不够）
 node_ok(){ node -v >/dev/null 2>&1 && npm -v >/dev/null 2>&1; }
 
-# 是否所有必备工具都已装齐（全装齐就恭喜跳过，不再走安装流程）
-all_installed(){ { claude --version >/dev/null 2>&1 || [ -d "/Applications/Claude.app" ]; } && codex --version >/dev/null 2>&1 && hermes_ok && lark-cli --version >/dev/null 2>&1 && node_ok && [ -d /Applications/Obsidian.app ]; }
+# 是否课程主力命令行工具都已装齐：这里不再卡 Obsidian / 桌面 App，避免 CLI 全绿却继续问安装。
+all_installed(){ { claude --version >/dev/null 2>&1 || [ -d "/Applications/Claude.app" ]; } && codex --version >/dev/null 2>&1 && hermes_ok && lark-cli --version >/dev/null 2>&1 && node_ok; }
 
 # 把 ~/.local/bin 加入当前会话和新开的 zsh/bash（官方脚本多装到这里）
 ensure_local_bin(){
@@ -519,10 +519,10 @@ main(){
   check_network
   detect
   if all_installed; then
-    hr; ok "${BOLD}恭喜！大课要用的工具你已经全部装好了 🎉${RST}"
-    say "  ${DIM}各工具自带自动更新（claude / codex / hermes 下次启动会自己更新；飞书 CLI 可跑 npm update -g @larksuite/cli）。${RST}"
-    echo
-    ask_continue "直接进入登录 / 授权？（已装好的不用重装）" && auth_phase
+    hr; ok "${BOLD}恭喜！大课主力命令行工具已经装好了，不用重新安装 🎉${RST}"
+    say "  ${DIM}已确认：Claude Code / Codex / Hermes / 飞书 CLI / Node.js。${RST}"
+    say "  ${DIM}Obsidian、Claudian、桌面 App 属于图形界面补充；需要时再单独装，不再卡住主流程。${RST}"
+    say "  ${DIM}确认命令：claude --version; codex --version; hermes --version; lark-cli --version${RST}"
     hr; ok "全部就绪，祝大课顺利 🚀"; exit 0
   fi
   hr; say "${BOLD}第一步：逐个检查并安装${RST}"; hr
