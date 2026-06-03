@@ -43,6 +43,28 @@ function Ensure-CodexPath {
   return $true
 }
 function Codex-Ok { if(Has 'codex'){ return $true }; return (Ensure-CodexPath -and (Has 'codex')) }
+function Codex-InstallerHasOSArchitecture {
+  try {
+    $t = [System.Runtime.InteropServices.RuntimeInformation]
+    return ($null -ne $t.GetProperty("OSArchitecture"))
+  } catch { return $false }
+}
+function Codex-FallbackArchitecture {
+  $raw = if($env:PROCESSOR_ARCHITEW6432){ $env:PROCESSOR_ARCHITEW6432 } else { $env:PROCESSOR_ARCHITECTURE }
+  if($raw -match 'ARM64'){ return 'Arm64' }
+  return 'X64'
+}
+function Install-CodexOfficial {
+  $installer = Invoke-RestMethod https://chatgpt.com/codex/install.ps1 -ErrorAction Stop
+  if(-not (Codex-InstallerHasOSArchitecture)){
+    $arch = Codex-FallbackArchitecture
+    Warn "当前 PowerShell 读不到 Codex 官方安装器需要的 OSArchitecture，已启用兼容架构识别：$arch"
+    $pattern = '\$architecture = \[System\.Runtime\.InteropServices\.RuntimeInformation\]::OSArchitecture'
+    if($installer -notmatch $pattern){ throw "Codex 官方安装器结构变化，无法应用兼容补丁。" }
+    $installer = $installer -replace $pattern, ('$architecture = "' + $arch + '"')
+  }
+  Invoke-Expression $installer
+}
 # 是否所有必备工具都已装齐（全装齐就恭喜跳过）
 function All-Installed { return ( ((Has 'claude') -or (Pkg-Installed 'Anthropic.Claude')) -and (Codex-Ok) -and (Has 'hermes') -and (Has 'lark-cli') -and (Node-Ok) -and (Pkg-Installed 'Obsidian.Obsidian') ) }
 
@@ -190,7 +212,7 @@ function Do-Codex {
   if(-not (Ask "现在安装 Codex？")){ $script:SKIPPED+="Codex"; return }
   Say "  正在下载安装（官方 PowerShell 安装器）……"
   $ok=$true
-  try { Invoke-Expression (Invoke-RestMethod https://chatgpt.com/codex/install.ps1 -ErrorAction Stop) } catch { $ok=$false; Warn "安装过程报错：$_" }
+  try { Install-CodexOfficial } catch { $ok=$false; Warn "安装过程报错：$_" }
   Refresh-Path
   Ensure-CodexPath | Out-Null
   if(Codex-Ok){ Ok "Codex 安装成功"; $script:INSTALLED+="Codex" }
@@ -407,8 +429,8 @@ function Show-FinalCheck {
   if(Codex-Ok){ Ok "Codex 可用：$(codex --version 2>$null | Select-Object -First 1)" }
   else {
     Bad "Codex 未识别"
-    Say "  修复命令（复制这一段运行）："
-    Say '  $bin="$env:LOCALAPPDATA\Programs\OpenAI\Codex\bin"; if(Test-Path "$bin\codex.exe"){ $env:Path="$bin;$env:Path"; codex --version } else { irm https://chatgpt.com/codex/install.ps1 | iex }'
+    Say "  修复命令（复制这一行重跑新版一键脚本）："
+    Say '  irm https://raw.githubusercontent.com/0xWinner98/mac-onboarding-setup/main/go.ps1 | iex'
   }
   if(Has 'hermes'){ Ok "Hermes 可用：$(hermes --version 2>$null | Select-Object -First 1)" } else { Bad "Hermes 未识别" }
   if(Has 'lark-cli'){ Ok "飞书 CLI 可用：$(lark-cli --version 2>$null | Select-Object -First 1)" } else { Bad "飞书 CLI 未识别" }
