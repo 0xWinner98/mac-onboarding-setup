@@ -117,6 +117,40 @@ setup_workspace(){
   ok "工作区：$WORKSPACE（已进入，后面装的工具都以这里为工作目录）"
 }
 
+# ---------- 基础底座前置安装（CLT / Node，后面各工具都依赖）----------
+ensure_base_deps(){
+  hr; say "${BOLD}先把基础底座装好${RST}（git / Node 这些是后面工具的地基，缺了会装不上）"; hr
+  # 1) Xcode 命令行工具：提供 git + 编译环境（Hermes 等必需）
+  if clt_ok; then
+    ok "开发者命令行工具 / git —— 已就绪"
+  else
+    warn "缺「Xcode 命令行工具」（git / Hermes 都要用）。马上弹一个系统窗口，请点【安装】。"
+    say "  ${DIM}它要联网下载、约几分钟。点了【安装】就别关窗口，脚本会等它装完自动继续。${RST}"
+    xcode-select --install 2>/dev/null || true
+    local waited=0
+    printf "  ${DIM}等待安装中"
+    while ! clt_ok; do
+      sleep 8; waited=$((waited+8)); printf "."
+      if [ "$waited" -ge 600 ]; then
+        printf "${RST}\n"; err "等了 10 分钟还没装好（可能没点【安装】或网络慢）。"
+        say "  ${DIM}装完 CLT 后重跑本脚本即可；或现在先跳过（Hermes 这步会失败）。${RST}"
+        FAILED+=("Xcode 命令行工具（装完后重跑脚本）")
+        ask_continue "先跳过、继续装其它工具？" || exit 0
+        return
+      fi
+    done
+    printf "${RST}\n"; ok "Xcode 命令行工具已就绪，git 可用了"; INSTALLED+=("Xcode 命令行工具")
+  fi
+  # 2) Node.js：提供 npm（飞书 CLI 必需）
+  if has_cmd node; then
+    ok "Node.js —— 已就绪（$(node -v)）"
+  else
+    say "${DIM}装 Node.js（官方包，免 brew、免密码）……${RST}"
+    if install_node; then INSTALLED+=("Node.js"); else warn "Node 自动装失败（多半网络）；装飞书 CLI 时会再试一次。"; fi
+  fi
+  # Python 不用单独装——Hermes 官方脚本会用 uv 自动装 Python 3.11
+}
+
 # ---------- 各工具安装 ----------
 do_claude(){
   step "Claude Code —— 大课主力 AI 助手（命令行）"
@@ -424,6 +458,7 @@ main(){
   ask_continue "开始安装流程？" || { say "好的，下次再来。已装好的不会重复装。"; exit 0; }
 
   setup_workspace
+  ensure_base_deps
   do_claude
   do_codex
   do_hermes

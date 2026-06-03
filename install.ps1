@@ -184,12 +184,17 @@ function Install-Node {
   return (Has 'node')
 }
 
-function Ensure-Git {
-  if(Has 'git'){ return }
-  Warn "没检测到 Git，正在用 winget 自动装（Claude Code / Hermes 都可能要用）……"
-  Winget-Install 'Git.Git' 'Git for Windows' | Out-Null
-  Refresh-Path
-  if(Has 'git'){ Ok "Git 安装成功" } else { Warn "Git 没装上（当前窗口可能没刷新）；后续若报缺 Git，重开 PowerShell 或手动装 https://gitforwindows.org" }
+function Ensure-BaseDeps {
+  Hr; Say "先把基础底座装好（winget / Git / Node，后面各工具都依赖）"; Hr
+  if(Ensure-Winget){ Ok "winget（应用安装程序）—— 已就绪" }
+  if(Has 'git'){ Ok "Git —— 已就绪" }
+  else {
+    Warn "没检测到 Git，正在用 winget 自动装（Claude Code / Hermes 都可能要用）……"
+    Winget-Install 'Git.Git' 'Git for Windows' | Out-Null
+    Refresh-Path
+    if(Has 'git'){ Ok "Git 安装成功" } else { Warn "Git 没装上（可能需重开 PowerShell）；后续报缺 Git 就手动装 https://gitforwindows.org" }
+  }
+  if(Has 'node'){ Ok "Node.js —— 已就绪（$(node -v)）" } else { Install-Node | Out-Null }
 }
 
 function Do-Larkcli {
@@ -349,7 +354,7 @@ function Main {
   Hr; Say "第一步：逐个检查并安装"; Hr
   if(-not (Ask "开始安装流程？")){ Say "好的，下次再来。已装好的不会重复装。"; return }
   Setup-Workspace
-  Ensure-Git
+  Ensure-BaseDeps
   Do-Claude
   Do-Codex
   Do-Hermes
