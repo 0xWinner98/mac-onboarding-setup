@@ -152,7 +152,7 @@ function Do-Claude {
   if(Has 'claude'){ Ok "Claude Code 安装成功"; $script:INSTALLED+="Claude Code" }
   elseif($cfBlocked){
     Bad "Claude Code 下载被 Cloudflare 拦了（返回的是人机验证页，不是脚本）——这不是网络不通。"
-    Say "  你的 IP 被当成机房/数据中心 IP（自建 VPS / 机场节点常见）。解决：换住宅 IP（家庭宽带 / 手机热点 / 住宅节点）重跑，或授权那步选「中转」走 CC Switch。"
+    Say "  是 claude.ai 前面的 Cloudflare 把你这个 IP 判成可疑了（跟机房/住宅无关，是这个具体 IP 的信誉评分）。解决：换个节点/IP 再跑（换机场节点、或开手机热点；住宅 IP 通常最稳），或授权那步选「中转」走 CC Switch。"
     $script:FAILED+="Claude Code（被 Cloudflare 拦 → 换住宅 IP 或走中转）"
   }
   elseif(-not $ok){ Bad "Claude Code 安装失败（多半网络），截图发到群里。"; $script:FAILED+="Claude Code（安装失败）" }
