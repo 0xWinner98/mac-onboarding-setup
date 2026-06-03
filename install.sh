@@ -114,11 +114,13 @@ detect(){
 # ---------- 工作区（知识库文件夹）----------
 setup_workspace(){
   step "先建一个工作区（你的知识库文件夹）"
-  say "在「文稿 Documents」下建个文件夹放知识库 + AI 工作区，名字自己起；以后 Obsidian 和 AI 都在这里干活。"
-  printf "${CYN}起个名字（直接回车用默认 Workspace）：${RST} "
-  local name; IFS= read -r name </dev/tty || name=""
-  [ -z "$name" ] && name="Workspace"
-  WORKSPACE="$HOME/Documents/$name"
+  say "给一个${BOLD}固定的文件夹${RST}放知识库 + AI 工作区，以后 Obsidian 和 AI 都在这里干活——选个你以后不会乱动的位置。"
+  local default="$HOME/Documents/Workspace"
+  say "  ${DIM}直接回车用默认：$default${RST}"
+  say "  ${DIM}或粘贴你想要的完整路径（绝对路径，例如 $HOME/AI工作区）：${RST}"
+  printf "${CYN}工作区路径：${RST} "
+  local inp; IFS= read -r inp </dev/tty || inp=""
+  [ -z "$inp" ] && WORKSPACE="$default" || WORKSPACE="$inp"
   mkdir -p "$WORKSPACE" 2>/dev/null && cd "$WORKSPACE" 2>/dev/null
   ok "工作区：$WORKSPACE（已进入，后面装的工具都以这里为工作目录）"
 }

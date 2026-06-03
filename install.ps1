@@ -119,10 +119,13 @@ function Detect {
 # ---------- 工作区 ----------
 function Setup-Workspace {
   Step "先建一个工作区（你的知识库文件夹）"
-  Say "在「文档 Documents」下建个文件夹放知识库 + AI 工作区，名字自己起；以后 Obsidian 和 AI 都在这里干活。"
-  $name = Read-Host "起个名字（直接回车用默认 Workspace）"
-  if([string]::IsNullOrWhiteSpace($name)){ $name = "Workspace" }
-  $script:WORKSPACE = Join-Path ([Environment]::GetFolderPath('MyDocuments')) $name
+  Say "给一个固定的文件夹放知识库 + AI 工作区，以后 Obsidian 和 AI 都在这里干活——选个你以后不会乱动的位置。"
+  Say "  建议别放在 OneDrive 同步的「文档」里（同步大文件容易出问题、路径还会变）。"
+  $default = Join-Path $env:USERPROFILE "AI-Workspace"
+  Say "  直接回车用默认：$default"
+  Say "  或粘贴你想要的完整路径（例如 D:\AI-Workspace）："
+  $inp = Read-Host "工作区路径"
+  if([string]::IsNullOrWhiteSpace($inp)){ $script:WORKSPACE = $default } else { $script:WORKSPACE = $inp }
   New-Item -ItemType Directory -Force -Path $script:WORKSPACE | Out-Null
   Set-Location $script:WORKSPACE
   Ok "工作区：$script:WORKSPACE（已进入，后面装的工具都以这里为工作目录）"
