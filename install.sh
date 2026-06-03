@@ -170,11 +170,26 @@ do_claude(){
   fi
   ask_continue "现在安装 Claude Code（命令行）？" || { SKIPPED+=("Claude Code"); return; }
   say "${DIM}正在下载安装，可能 1-2 分钟，请耐心等、别关窗口……${RST}"
-  local cc_script; cc_script=$(curl -fsSL https://claude.ai/install.sh 2>/dev/null)
+  local cc_script cf_blocked=""
+  cc_script=$(curl -fsSL https://claude.ai/install.sh 2>/dev/null)
   if printf '%s' "$cc_script" | grep -qiE 'just a moment|cf_chl|challenge-platform|<html'; then
-    err "Claude Code 下载被 Cloudflare 拦了（返回人机验证页，不是脚本）——这不是网络不通。"
-    say "  ${DIM}是 claude.ai 前面的 Cloudflare 把你这个 IP 判成可疑了（跟机房/住宅无关，是这个具体 IP 的信誉评分）。解决：换个节点/IP 再跑（换机场节点、或开手机热点；住宅 IP 通常最稳），或授权那步选「中转」走 CC Switch。${RST}"
-    FAILED+=("Claude Code（被 Cloudflare 拦 → 换住宅 IP 或走中转）"); return
+    cf_blocked=1
+    warn "claude.ai 入口返回了 Cloudflare 验证页，改用官方下载备用源……"
+    cc_script=$(curl -fsSL https://downloads.claude.ai/claude-code-releases/bootstrap.sh 2>/dev/null)
+  fi
+  if printf '%s' "$cc_script" | grep -qiE 'just a moment|cf_chl|challenge-platform|<html'; then
+    err "Claude Code 下载入口被 Cloudflare 拦了，官方备用源也没拿到脚本——这不是网络完全不通。"
+    say "  ${DIM}是 claude.ai 入口前面的 Cloudflare 把你这个 IP 判成可疑了（跟机房/住宅无关，是这个具体 IP 的信誉评分）。解决：换个节点/IP 再跑（换机场节点、或开手机热点；住宅 IP 通常最稳），或授权那步选「中转」走 CC Switch。${RST}"
+    FAILED+=("Claude Code（入口被 Cloudflare 拦，备用源也失败 → 换 IP 或走中转）"); return
+  elif [ -z "$cc_script" ]; then
+    if [ -n "$cf_blocked" ]; then
+      err "Claude Code 下载入口被 Cloudflare 拦了，官方备用源也没拿到脚本。"
+      say "  ${DIM}换个节点/IP 再跑，或授权那步选「中转」走 CC Switch。${RST}"
+      FAILED+=("Claude Code（入口被 Cloudflare 拦，备用源也失败 → 换 IP 或走中转）"); return
+    fi
+    err "Claude Code 安装脚本下载失败（没拿到脚本内容）。"
+    say "  ${DIM}这通常是网络或 DNS 问题。换个节点/IP 后重跑；仍失败就截图发到群里。${RST}"
+    FAILED+=("Claude Code（下载脚本失败）"); return
   fi
   printf '%s' "$cc_script" | bash 2>&1 | tee /tmp/cc_install.log
   ensure_local_bin

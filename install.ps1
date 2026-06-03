@@ -145,15 +145,20 @@ function Do-Claude {
   $ok=$true; $cfBlocked=$false
   try {
     $cc = Invoke-RestMethod https://claude.ai/install.ps1 -ErrorAction Stop
-    if("$cc" -match 'Just a moment|cf_chl|challenge-platform|<html') { $cfBlocked=$true; $ok=$false }
+    if("$cc" -match 'Just a moment|cf_chl|challenge-platform|<html') {
+      $cfBlocked=$true
+      Warn "claude.ai 入口返回了 Cloudflare 验证页，改用官方下载备用源……"
+      $cc = Invoke-RestMethod https://downloads.claude.ai/claude-code-releases/bootstrap.ps1 -ErrorAction Stop
+    }
+    if("$cc" -match 'Just a moment|cf_chl|challenge-platform|<html') { $ok=$false }
     else { Invoke-Expression "$cc" }
   } catch { $ok=$false; Warn "安装过程报错：$_" }
   Refresh-Path
   if(Has 'claude'){ Ok "Claude Code 安装成功"; $script:INSTALLED+="Claude Code" }
   elseif($cfBlocked){
-    Bad "Claude Code 下载被 Cloudflare 拦了（返回的是人机验证页，不是脚本）——这不是网络不通。"
-    Say "  是 claude.ai 前面的 Cloudflare 把你这个 IP 判成可疑了（跟机房/住宅无关，是这个具体 IP 的信誉评分）。解决：换个节点/IP 再跑（换机场节点、或开手机热点；住宅 IP 通常最稳），或授权那步选「中转」走 CC Switch。"
-    $script:FAILED+="Claude Code（被 Cloudflare 拦 → 换住宅 IP 或走中转）"
+    Bad "Claude Code 下载入口被 Cloudflare 拦了，官方备用源也没装成——这不是网络完全不通。"
+    Say "  是 claude.ai 入口前面的 Cloudflare 把你这个 IP 判成可疑了（跟机房/住宅无关，是这个具体 IP 的信誉评分）。解决：换个节点/IP 再跑（换机场节点、或开手机热点；住宅 IP 通常最稳），或授权那步选「中转」走 CC Switch。"
+    $script:FAILED+="Claude Code（入口被 Cloudflare 拦，备用源也失败 → 换 IP 或走中转）"
   }
   elseif(-not $ok){ Bad "Claude Code 安装失败（多半网络），截图发到群里。"; $script:FAILED+="Claude Code（安装失败）" }
   else { Warn "装完了但当前窗口没认到命令（结束后重开 PowerShell 再试 claude --version）"; $script:INSTALLED+="Claude Code（需重开终端确认）" }
