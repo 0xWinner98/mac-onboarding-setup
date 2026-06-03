@@ -118,18 +118,35 @@ function Pkg-Installed($id){
 
 # ---------- 网络检测 ----------
 function Test-Url($url){
-  try { Invoke-WebRequest -Uri $url -TimeoutSec 8 -UseBasicParsing -ErrorAction Stop | Out-Null; return $true } catch { return $false }
+  try { Invoke-WebRequest -Uri $url -TimeoutSec 8 -UseBasicParsing -ErrorAction Stop | Out-Null; return $true } catch {}
+  try {
+    $wc = New-Object System.Net.WebClient
+    $wc.Headers.Add("User-Agent", "Mozilla/5.0")
+    $wc.Proxy = [System.Net.WebRequest]::GetSystemWebProxy()
+    if($wc.Proxy){ $wc.Proxy.Credentials = [System.Net.CredentialCache]::DefaultCredentials }
+    $wc.DownloadString($url) | Out-Null
+    return $true
+  } catch { return $false }
+}
+function Test-AnyUrl($urls){
+  foreach($url in $urls){ if(Test-Url $url){ return $true } }
+  return $false
 }
 function Check-Network {
-  Hr; Say "先检查网络（AI 工具的源大多在国外，连不上就装不了）"; Hr
-  $gh = Test-Url "https://github.com"
-  $gg = Test-Url "https://www.google.com"
-  if($gh){ Ok "GitHub 可访问" } else { Bad "GitHub 连不上" }
-  if($gg){ Ok "Google 可访问" } else { Bad "Google 连不上" }
-  if(-not $gh -or -not $gg){
-    Warn "网络连不上 GitHub / Google——这台电脑当前装不了这些工具（是网络问题，不是脚本）。"
-    Say  "  请先科学上网（确认浏览器能打开 github.com 和 google.com）再回来跑。"
-    if(-not (Ask "知道了，仍要继续试？（多半会失败）")){ Say "好的，弄通网络再来。"; exit 0 }
+  Hr; Say "先检查 PowerShell 下载通道（仅提醒，不拦安装）"; Hr
+  $gh = Test-AnyUrl @(
+    "https://raw.githubusercontent.com/0xWinner98/mac-onboarding-setup/main/go.ps1",
+    "https://github.com"
+  )
+  $ai = Test-AnyUrl @(
+    "https://downloads.claude.ai/claude-code-releases/bootstrap.ps1",
+    "https://chatgpt.com/codex/install.ps1"
+  )
+  if($gh){ Ok "GitHub / Raw GitHub 下载通道可访问" } else { Warn "PowerShell 暂时访问不到 GitHub / Raw GitHub 下载通道" }
+  if($ai){ Ok "Claude / Codex 官方下载源可访问" } else { Warn "PowerShell 暂时访问不到 Claude / Codex 官方下载源" }
+  if(-not $gh -or -not $ai){
+    Warn "这只是 PowerShell 预检失败，不等于浏览器打不开，也不直接说明脚本有问题。"
+    Say  "  常见原因：浏览器走了代理，但 PowerShell 没走同一个代理。脚本会继续尝试安装；如果后面某个工具下载失败，再换节点 / 开系统代理或 TUN 模式 / 截图发群。"
   }
 }
 
