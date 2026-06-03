@@ -219,8 +219,9 @@ do_hermes(){
   say "将运行官方安装脚本（仅需 Git，会自动装 Python / Node 等依赖，耗时几分钟）："
   say "  ${DIM}curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash${RST}"
   ask_continue "现在安装 Hermes？" || { SKIPPED+=("Hermes"); return; }
-  say "${DIM}正在装 Hermes：要下 200+ 个 Python 包，首次 5-15 分钟。${RST}"
-  say "${DIM}中途看到「Trying tier: all」「Resolved N packages」「uv.lock sync failed, falling back」都正常（它在从 PyPI 下载），这步可能半天没进度条——别以为卡住、别关窗口。${RST}"
+  say "${DIM}正在装 Hermes：会下 uv / Python / Node 等依赖（连 astral.sh / GitHub / PyPI 等国外源），正常首次 5-15 分钟。${RST}"
+  say "${DIM}中途看到「Trying tier: all」「Resolved N packages」「uv.lock sync failed」都正常，别关窗口。${RST}"
+  say "${YLW}但卡在某一步（如 Installing managed uv）超过 10 分钟完全不动 = 网络/Cloudflare 拦了下载：按 Ctrl+C 中断，先跳过 Hermes（Claude Code/Codex 是主力、够用），换干净网络/IP 再单独装。${RST}"
   if curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash; then
     ensure_local_bin
     if has_cmd hermes; then ok "Hermes 安装成功：$(hermes --version 2>/dev/null | head -1)"; INSTALLED+=("Hermes")

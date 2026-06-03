@@ -181,7 +181,8 @@ function Do-Hermes {
   Step "Hermes Agent —— 能成长的 AI 助手"
   if(Has 'hermes'){ Ok "已安装"; $script:SKIPPED+="Hermes"; return }
   if(-not (Ask "现在安装 Hermes？（会自动装 Git/Python/Node 等依赖，耗时几分钟）")){ $script:SKIPPED+="Hermes"; return }
-  Say "  正在装 Hermes：会自动下载依赖，首次 5-15 分钟。看到没进度条别以为卡住、别关窗口。"
+  Say "  正在装 Hermes：会下 uv / Python / Node 等依赖（连 astral.sh / GitHub 等国外源），正常首次 5-15 分钟、没进度条别慌。"
+  Warn "卡在某一步（如 Installing managed uv）超过 10 分钟完全不动 = 网络/Cloudflare 拦了下载：按 Ctrl+C 中断，先跳过 Hermes（Claude Code/Codex 是主力、够用），换干净网络/IP 再单独装。"
   $ok=$true
   try { Invoke-Expression (Invoke-RestMethod https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.ps1 -ErrorAction Stop) } catch { $ok=$false; Warn "安装过程报错：$_" }
   Refresh-Path
