@@ -39,9 +39,10 @@ clt_ok(){ xcode-select -p >/dev/null 2>&1 && git --version >/dev/null 2>&1; }
 
 # Node 是否真可用：node 和 npm 都得能跑（飞书 CLI 要 npm，光有 node 不够）
 node_ok(){ node -v >/dev/null 2>&1 && npm -v >/dev/null 2>&1; }
+lark_skills_ok(){ [ -f "$HOME/.agents/skills/lark-shared/SKILL.md" ]; }
 
 # 是否课程主力命令行工具都已装齐：这里不再卡 Obsidian / 桌面 App，避免 CLI 全绿却继续问安装。
-all_installed(){ { claude --version >/dev/null 2>&1 || [ -d "/Applications/Claude.app" ]; } && codex --version >/dev/null 2>&1 && hermes_ok && lark-cli --version >/dev/null 2>&1 && node_ok; }
+all_installed(){ { claude --version >/dev/null 2>&1 || [ -d "/Applications/Claude.app" ]; } && codex --version >/dev/null 2>&1 && hermes_ok && lark-cli --version >/dev/null 2>&1 && lark_skills_ok && node_ok; }
 
 # 把命令目录加入当前会话和新开的 zsh/bash。
 add_shell_path_entry(){
@@ -158,6 +159,7 @@ detect(){
   has_cmd codex    && ok "Codex (CLI) —— $(codex --version 2>/dev/null | head -1)"          || err "Codex (CLI) —— 未装"
   hermes_ok        && ok "Hermes (CLI) —— $(hermes_version)"                                 || err "Hermes (CLI) —— 未装"
   has_cmd lark-cli && ok "飞书 CLI —— $(lark-cli --version 2>/dev/null | head -1)"          || err "飞书 CLI —— 未装"
+  lark_skills_ok   && ok "飞书官方 Agent Skills —— 已装"                                      || warn "飞书官方 Agent Skills —— 未补齐（装飞书 CLI 时会一起补）"
   say "${BOLD}  ▸ 桌面 App / 知识库${RST}"
   [ -d /Applications/Obsidian.app ] && ok "Obsidian —— 已装" || err "Obsidian —— 未装"
   [ -d "/Applications/Claude.app" ] && ok "Claude 桌面 App —— 已装" || say "  ◦ Claude 桌面 App —— 未装（可选，图形界面）"
@@ -327,7 +329,6 @@ install_node(){
 
 do_larkcli(){
   step "飞书 CLI —— 让 AI 直接读写你的飞书表格 / 文档"
-  if has_cmd lark-cli; then ok "已安装：$(lark-cli --version 2>/dev/null | head -1)"; SKIPPED+=("飞书 CLI"); return; fi
   if ! node_ok; then
     warn "飞书 CLI 需要 Node.js，没检测到，正在自动装（免 brew、免密码）……"
     if ! install_node; then
@@ -336,11 +337,17 @@ do_larkcli(){
       SKIPPED+=("飞书 CLI（缺 Node，自动装失败/网络）"); return
     fi
   fi
-  say "将通过 npm 安装：${DIM}npm install -g @larksuite/cli${RST}"
-  ask_continue "现在安装飞书 CLI？" || { SKIPPED+=("飞书 CLI"); return; }
-  if npm install -g @larksuite/cli; then
+  if has_cmd lark-cli; then
+    ok "已检测到飞书 CLI：$(lark-cli --version 2>/dev/null | head -1)"
+    say "  ${DIM}为了补齐官方 AI Agent Skills，这一步会再运行一次官方安装器（已装好的会自动升级/跳过）。${RST}"
+  fi
+  say "将通过官方安装器安装：${DIM}npx --yes @larksuite/cli@latest install${RST}"
+  say "  ${DIM}这一步会把飞书 CLI 本体 + 官方 AI Agent Skills 一起装好。${RST}"
+  ask_continue "现在安装 / 补齐飞书 CLI + 官方 AI Agent Skills？" || { SKIPPED+=("飞书 CLI"); return; }
+  if npx --yes @larksuite/cli@latest install; then
     repair_path_if_body_found
-    if has_cmd lark-cli; then ok "飞书 CLI 安装成功：$(lark-cli --version 2>/dev/null | head -1)"; INSTALLED+=("飞书 CLI")
+    if has_cmd lark-cli && lark_skills_ok; then ok "飞书 CLI + 官方 Agent Skills 安装成功：$(lark-cli --version 2>/dev/null | head -1)"; INSTALLED+=("飞书 CLI（含官方 Agent Skills）")
+    elif has_cmd lark-cli; then warn "飞书 CLI 已可用，但官方 Agent Skills 没检测到；重跑脚本会继续补。"; INSTALLED+=("飞书 CLI（Agent Skills 待补）")
     else warn "装好了，但当前窗口还没刷新命令（结束后重开终端即可）"; INSTALLED+=("飞书 CLI（需重开终端）"); fi
   else err "飞书 CLI 安装失败（可能是 npm 权限）。截图发到群里。"; FAILED+=("飞书 CLI"); fi
 }
@@ -425,7 +432,7 @@ auth_phase(){
   if has_cmd lark-cli; then
     step "2) 配置并授权 飞书 CLI"
     say "先初始化，再扫码 / 浏览器授权。"
-    ask_continue "现在配置飞书 CLI？" && { lark-cli config init </dev/tty; lark-cli auth login </dev/tty || warn "授权没完成，稍后可手动运行 lark-cli auth login"; }
+    ask_continue "现在配置并授权飞书 CLI？" && { lark-cli config init --new </dev/tty; lark-cli auth login --recommend </dev/tty || warn "授权没完成，稍后可手动运行 lark-cli auth login --recommend"; }
   fi
 
   if hermes_ok; then
@@ -573,7 +580,7 @@ main(){
   detect
   if all_installed; then
     hr; ok "${BOLD}恭喜！大课主力命令行工具已经装好了，不用重新安装 🎉${RST}"
-    say "  ${DIM}已确认：Claude Code / Codex / Hermes / 飞书 CLI / Node.js。${RST}"
+    say "  ${DIM}已确认：Claude Code / Codex / Hermes / 飞书 CLI + 官方 Agent Skills / Node.js。${RST}"
     say "  ${DIM}Obsidian、Claudian、桌面 App 属于图形界面补充；需要时再单独装，不再卡住主流程。${RST}"
     say "  ${DIM}确认命令：claude --version; codex --version; hermes --version; lark-cli --version${RST}"
     hr; ok "全部就绪，祝大课顺利 🚀"; exit 0
