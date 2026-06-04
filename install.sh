@@ -89,6 +89,24 @@ npm_global_bin(){
   [ -n "$prefix" ] && printf '%s\n' "$prefix/bin"
 }
 
+ensure_npm_user_prefix(){
+  local prefix user_prefix bin
+  prefix=$(npm prefix -g 2>/dev/null || npm config get prefix 2>/dev/null)
+  user_prefix="$HOME/.npm-global"
+  if [ -n "$prefix" ] && [ -w "$prefix/lib/node_modules" ]; then
+    bin="$prefix/bin"
+    add_shell_path_entry "$bin" "npm 全局命令"
+    return 0
+  fi
+  warn "当前 npm 全局目录不可写，改用用户目录安装飞书 CLI（不需要 sudo）：$user_prefix"
+  mkdir -p "$user_prefix" 2>/dev/null || return 1
+  npm config set prefix "$user_prefix" >/dev/null 2>&1 || return 1
+  bin="$user_prefix/bin"
+  mkdir -p "$bin" 2>/dev/null
+  add_shell_path_entry "$bin" "npm 全局命令"
+  return 0
+}
+
 repair_path_for_tool(){
   local display="$1" cmd="$2" dir="$3" file="${4:-$2}"
   if has_cmd "$cmd"; then
@@ -340,6 +358,10 @@ do_larkcli(){
   if has_cmd lark-cli; then
     ok "已检测到飞书 CLI：$(lark-cli --version 2>/dev/null | head -1)"
     say "  ${DIM}为了补齐官方 AI Agent Skills，这一步会再运行一次官方安装器（已装好的会自动升级/跳过）。${RST}"
+  fi
+  if ! ensure_npm_user_prefix; then
+    err "npm 全局目录配置失败。请截图发到群里。"
+    FAILED+=("飞书 CLI（npm 全局目录不可写）"); return
   fi
   say "将通过官方安装器安装：${DIM}npx --yes @larksuite/cli@latest install${RST}"
   say "  ${DIM}这一步会把飞书 CLI 本体 + 官方 AI Agent Skills 一起装好。${RST}"
