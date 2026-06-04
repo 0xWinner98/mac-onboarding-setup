@@ -34,6 +34,14 @@ function Cmd-Version($cmd){
   return ""
 }
 function Cmd-Usable($cmd){ return (-not [string]::IsNullOrWhiteSpace((Cmd-Version $cmd))) }
+function File-Version($path){
+  try {
+    if([string]::IsNullOrWhiteSpace($path) -or -not (Test-Path $path)){ return "" }
+    $out = & $path --version 2>$null | Select-Object -First 1
+    if($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace("$out")){ return "$out" }
+  } catch {}
+  return ""
+}
 function Lark-SkillsOk {
   if([string]::IsNullOrWhiteSpace($env:USERPROFILE)){ return $false }
   return (Test-Path (Join-Path $env:USERPROFILE ".agents\skills\lark-shared\SKILL.md"))
@@ -101,12 +109,19 @@ function Install-CodexOfficial {
   $installer = Invoke-RestMethod https://chatgpt.com/codex/install.ps1 -ErrorAction Stop
   if(-not (Codex-InstallerHasOSArchitecture)){
     $arch = Codex-FallbackArchitecture
-    Warn "当前 PowerShell 读不到 Codex 官方安装器需要的 OSArchitecture，已启用兼容架构识别：$arch"
+    Warn "当前 PowerShell 版本读不到 Codex 官方安装器使用的 OSArchitecture（不是缺软件），已按系统环境识别为：$arch"
     $pattern = '\$architecture = \[System\.Runtime\.InteropServices\.RuntimeInformation\]::OSArchitecture'
     if($installer -notmatch $pattern){ throw "Codex 官方安装器结构变化，无法应用兼容补丁。" }
     $installer = $installer -replace $pattern, ('$architecture = "' + $arch + '"')
   }
-  Invoke-Expression $installer
+  $oldNonInteractive = $env:CODEX_NON_INTERACTIVE
+  try {
+    $env:CODEX_NON_INTERACTIVE = '1'
+    Invoke-Expression $installer
+  } finally {
+    if($null -eq $oldNonInteractive){ Remove-Item Env:\CODEX_NON_INTERACTIVE -ErrorAction SilentlyContinue }
+    else { $env:CODEX_NON_INTERACTIVE = $oldNonInteractive }
+  }
 }
 function Repair-CodexSandboxSetup {
   $bin = Codex-BinDir
@@ -192,6 +207,17 @@ function Existing-CommandFile($dirs, $files){
     }
   }
   return $null
+}
+function Command-VersionOrFile($command, $dirs, $files){
+  $ver = Cmd-Version $command
+  if($ver){ return $ver }
+  $found = Existing-CommandFile $dirs $files
+  if($found){
+    Add-UserPathEntry (Split-Path -Parent $found) | Out-Null
+    $ver = File-Version $found
+    if($ver){ return $ver }
+  }
+  return ""
 }
 function Npm-BinDirs {
   $dirs = @()
@@ -399,7 +425,15 @@ function Do-Claude {
     else { Invoke-Expression "$cc" }
   } catch { $ok=$false; Warn "安装过程报错：$_" }
   Refresh-Path
-  if(Cmd-Usable 'claude'){ Ok "Claude Code 安装成功"; $script:INSTALLED+="Claude Code" }
+  $claudeFile = Existing-CommandFile (Claude-BinDirs) @('claude.exe','claude.cmd')
+  if($claudeFile){ Add-UserPathEntry (Split-Path -Parent $claudeFile) | Out-Null; Refresh-Path }
+  $claudeVer = Command-VersionOrFile 'claude' (Claude-BinDirs) @('claude.exe','claude.cmd')
+  if($claudeVer){ Ok "Claude Code 安装成功：$claudeVer"; $script:INSTALLED+="Claude Code" }
+  elseif($claudeFile){
+    Warn "Claude Code 本体已安装在：$claudeFile"
+    Warn "PATH 已写入；当前窗口仍没识别的话，关掉 PowerShell 重开后再试 claude --version。"
+    $script:INSTALLED+="Claude Code（已安装，需重开终端确认）"
+  }
   elseif($cfBlocked){
     Bad "Claude Code 下载入口被 Cloudflare 拦了，官方备用源也没装成——这不是网络完全不通。"
     Say "  是 claude.ai 入口前面的 Cloudflare 把你这个 IP 判成可疑了（跟机房/住宅无关，是这个具体 IP 的信誉评分）。解决：换个节点/IP 再跑（换机场节点、或开手机热点；住宅 IP 通常最稳），或授权那步选「中转」走 CC Switch。"
@@ -428,12 +462,19 @@ function Do-Codex {
   try { Install-CodexOfficial } catch { $ok=$false; Warn "安装过程报错：$_" }
   Refresh-Path
   Ensure-CodexPath | Out-Null
-  if(Codex-Ok){
+  $codexExe = Join-Path (Codex-BinDir) "codex.exe"
+  $codexVer = Command-VersionOrFile 'codex' @(Codex-BinDir) @('codex.exe')
+  if($codexVer){
     if(Repair-CodexSandboxSetup){ Ok "Codex 安装成功，Windows sandbox 辅助程序已就绪" }
     else { Ok "Codex 安装成功"; Warn "Windows sandbox 辅助程序未补齐；如启动 Codex 弹窗找不到 codex-windows-sandbox-setup.exe，截图发群里。" }
     $script:INSTALLED+="Codex"
   }
   elseif(-not $ok){ Bad "Codex 安装失败（多半网络），截图发到群里。"; $script:FAILED+="Codex（安装失败）" }
+  elseif(Test-Path $codexExe){
+    Warn "Codex 本体已安装在：$codexExe"
+    Warn "PATH 已写入；当前窗口仍没识别的话，关掉 PowerShell 重开后再试 codex --version。"
+    $script:INSTALLED+="Codex（已安装，需重开终端确认）"
+  }
   else {
     Bad "Codex 安装后仍没识别到命令。"
     Say "  请截图发到群里；也可以先手动检查：$env:LOCALAPPDATA\Programs\OpenAI\Codex\bin\codex.exe --version"
@@ -663,9 +704,9 @@ function Summary {
 
 function Show-FinalCheck {
   Hr; Say "最后确认：逐个检查命令是否能用"; Hr
-  $claudeVer = Cmd-Version 'claude'
+  $claudeVer = Command-VersionOrFile 'claude' (Claude-BinDirs) @('claude.exe','claude.cmd')
   if($claudeVer){ Ok "Claude Code 可用：$claudeVer" } else { Bad "Claude Code 未识别" }
-  $codexVer = Cmd-Version 'codex'
+  $codexVer = Command-VersionOrFile 'codex' @(Codex-BinDir) @('codex.exe')
   if($codexVer){ Ok "Codex 可用：$codexVer" }
   else {
     Bad "Codex 未识别"
