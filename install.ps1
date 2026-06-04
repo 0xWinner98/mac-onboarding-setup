@@ -28,6 +28,15 @@ $script:INSTALLED=@(); $script:SKIPPED=@(); $script:FAILED=@()
 function Has($cmd){ return [bool](Get-Command $cmd -ErrorAction SilentlyContinue) }
 function Cmd-Version($cmd){
   try {
+    $resolved = Get-Command $cmd -ErrorAction Stop
+    $path = $resolved.Path
+    if([string]::IsNullOrWhiteSpace($path)){ $path = $resolved.Source }
+    if(-not [string]::IsNullOrWhiteSpace($path) -and "$path" -notmatch '\.ps1$'){
+      $out = & $path --version 2>$null | Select-Object -First 1
+      if($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace("$out")){ return "$out" }
+    }
+  } catch {}
+  try {
     $out = cmd /d /c "$cmd --version" 2>$null | Select-Object -First 1
     if($LASTEXITCODE -eq 0 -and -not [string]::IsNullOrWhiteSpace("$out")){ return "$out" }
   } catch {}
@@ -388,13 +397,20 @@ function Detect {
 }
 
 # ---------- 工作区 ----------
+function Default-WorkspacePath {
+  foreach($drive in @('D:','E:','F:')){
+    $root = "$drive\"
+    if(Test-Path $root){ return (Join-Path $root "AI-Workspace") }
+  }
+  return (Join-Path $env:USERPROFILE "AI-Workspace")
+}
 function Setup-Workspace {
   Step "先建一个工作区（你的知识库文件夹）"
   Say "给一个固定的文件夹放知识库 + AI 工作区，以后 Obsidian 和 AI 都在这里干活——选个你以后不会乱动的位置。"
-  Say "  建议别放在 OneDrive 同步的「文档」里（同步大文件容易出问题、路径还会变）。"
-  $default = Join-Path $env:USERPROFILE "AI-Workspace"
+  Say "  建议放到 C 盘以外的数据盘，C 盘通常空间小；也别放在 OneDrive 同步的「文档」里（同步大文件容易出问题、路径还会变）。"
+  $default = Default-WorkspacePath
   Say "  直接回车用默认：$default"
-  Say "  或粘贴你想要的完整路径（例如 D:\AI-Workspace）："
+  Say "  或粘贴你想要的完整路径（例如 D:\AI-Workspace、E:\AI-Workspace）："
   $inp = Read-Host "工作区路径"
   if([string]::IsNullOrWhiteSpace($inp)){ $script:WORKSPACE = $default } else { $script:WORKSPACE = $inp }
   New-Item -ItemType Directory -Force -Path $script:WORKSPACE | Out-Null
