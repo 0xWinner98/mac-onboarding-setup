@@ -62,7 +62,9 @@ function Path-HasEntry($pathValue, $dir){
   $trim = @([char]92,[char]47)
   $needle = $dir.Trim().TrimEnd($trim)
   foreach($p in ($pathValue -split ';')){
-    if($p.Trim().TrimEnd($trim) -ieq $needle){ return $true }
+    $raw = $p.Trim().TrimEnd($trim)
+    $expanded = [System.Environment]::ExpandEnvironmentVariables($raw).TrimEnd($trim)
+    if($raw -ieq $needle -or $expanded -ieq $needle){ return $true }
   }
   return $false
 }
@@ -72,6 +74,12 @@ function Get-UserPathRaw {
     if($null -ne $v){ return "$v" }
   } catch {}
   return [System.Environment]::GetEnvironmentVariable("Path","User")
+}
+function Get-MachinePathRaw {
+  return [System.Environment]::GetEnvironmentVariable("Path","Machine")
+}
+function Path-AlreadyConfigured($dir){
+  return ((Path-HasEntry $env:Path $dir) -or (Path-HasEntry (Get-UserPathRaw) $dir) -or (Path-HasEntry (Get-MachinePathRaw) $dir))
 }
 function Set-UserPathRaw($value){
   try {
@@ -273,6 +281,25 @@ function Repair-PathForTool($display, $command, $dirs, $files){
   $found = Existing-CommandFile $dirs $files
   if(-not $found){ return $null }
   $dir = Split-Path -Parent $found
+  if(Path-AlreadyConfigured $dir){
+    Refresh-Path
+    if(-not (Path-HasEntry $env:Path $dir)){ $env:Path = "$dir;$env:Path" }
+    if(Cmd-Usable $command){
+      Say ""
+      Hr
+      Say "PATH 检查：$display"
+      Ok "$display 环境已配置，当前脚本窗口已刷新：$command 可用了"
+      Say ""
+      return $true
+    }
+    Say ""
+    Hr
+    Say "PATH 检查：$display"
+    Warn "$display 本体已安装，PATH 也已经包含：$dir"
+    Warn "只是当前脚本窗口暂时没识别到；如果你新开终端能运行 $command，就不用再修复，脚本会继续往下走。"
+    Say ""
+    return $false
+  }
   Say ""
   Hr
   Say "PATH 修复：$display"
