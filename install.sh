@@ -90,21 +90,17 @@ npm_global_bin(){
 }
 
 ensure_npm_user_cache(){
-  local cache user_cache test_file
-  cache=$(npm config get cache 2>/dev/null)
-  [ -n "$cache" ] || cache="$HOME/.npm"
-  mkdir -p "$cache/tmp" 2>/dev/null
-  test_file="$cache/tmp/.hjsx-cache-test-$$"
-  if ( : > "$test_file" ) 2>/dev/null; then
-    rm -f "$test_file" 2>/dev/null
-    export npm_config_cache="$cache"
-    return 0
-  fi
-
+  local user_cache test_file
   user_cache="$HOME/.npm-cache"
-  warn "当前 npm 缓存目录不可写（常见原因：以前用 sudo npm 留下了 root 文件），改用用户缓存目录：$user_cache"
+  # 专门给一键脚本使用的 npm 缓存，绕开旧 ~/.npm 里可能存在的 root-owned 文件。
+  warn "飞书 CLI 安装将使用用户缓存目录，避开旧 npm 缓存权限问题：$user_cache"
   mkdir -p "$user_cache" 2>/dev/null || return 1
   export npm_config_cache="$user_cache"
+  test_file="$user_cache/.hjsx-cache-test-$$"
+  if ! ( : > "$test_file" ) 2>/dev/null; then
+    return 1
+  fi
+  rm -f "$test_file" 2>/dev/null
   npm config set cache "$user_cache" >/dev/null 2>&1 || true
   return 0
 }
