@@ -89,6 +89,26 @@ npm_global_bin(){
   [ -n "$prefix" ] && printf '%s\n' "$prefix/bin"
 }
 
+ensure_npm_user_cache(){
+  local cache user_cache test_file
+  cache=$(npm config get cache 2>/dev/null)
+  [ -n "$cache" ] || cache="$HOME/.npm"
+  mkdir -p "$cache/tmp" 2>/dev/null
+  test_file="$cache/tmp/.hjsx-cache-test-$$"
+  if ( : > "$test_file" ) 2>/dev/null; then
+    rm -f "$test_file" 2>/dev/null
+    export npm_config_cache="$cache"
+    return 0
+  fi
+
+  user_cache="$HOME/.npm-cache"
+  warn "当前 npm 缓存目录不可写（常见原因：以前用 sudo npm 留下了 root 文件），改用用户缓存目录：$user_cache"
+  mkdir -p "$user_cache" 2>/dev/null || return 1
+  export npm_config_cache="$user_cache"
+  npm config set cache "$user_cache" >/dev/null 2>&1 || true
+  return 0
+}
+
 ensure_npm_user_prefix(){
   local prefix user_prefix bin
   prefix=$(npm prefix -g 2>/dev/null || npm config get prefix 2>/dev/null)
@@ -100,7 +120,8 @@ ensure_npm_user_prefix(){
   fi
   warn "当前 npm 全局目录不可写，改用用户目录安装飞书 CLI（不需要 sudo）：$user_prefix"
   mkdir -p "$user_prefix" 2>/dev/null || return 1
-  npm config set prefix "$user_prefix" >/dev/null 2>&1 || return 1
+  export npm_config_prefix="$user_prefix"
+  npm config set prefix "$user_prefix" >/dev/null 2>&1 || true
   bin="$user_prefix/bin"
   mkdir -p "$bin" 2>/dev/null
   add_shell_path_entry "$bin" "npm 全局命令"
@@ -364,6 +385,10 @@ do_larkcli(){
     err "npm 全局目录配置失败。请截图发到群里。"
     FAILED+=("飞书 CLI（npm 全局目录不可写）"); return
   fi
+  if ! ensure_npm_user_cache; then
+    err "npm 缓存目录配置失败。请截图发到群里。"
+    FAILED+=("飞书 CLI（npm 缓存目录不可写）"); return
+  fi
   say "将通过官方安装器安装：${DIM}npx --yes @larksuite/cli@latest install${RST}"
   say "  ${DIM}这一步会把飞书 CLI 本体 + 官方 AI Agent Skills 一起装好。${RST}"
   ask_continue "现在安装 / 补齐飞书 CLI + 官方 AI Agent Skills？" || { SKIPPED+=("飞书 CLI"); return; }
@@ -372,7 +397,7 @@ do_larkcli(){
     if has_cmd lark-cli && lark_skills_ok; then ok "飞书 CLI + 官方 Agent Skills 安装成功：$(lark-cli --version 2>/dev/null | head -1)"; INSTALLED+=("飞书 CLI（含官方 Agent Skills）")
     elif has_cmd lark-cli; then warn "飞书 CLI 已可用，但官方 Agent Skills 没检测到；重跑脚本会继续补。"; INSTALLED+=("飞书 CLI（Agent Skills 待补）")
     else warn "装好了，但当前窗口还没刷新命令（结束后重开终端即可）"; INSTALLED+=("飞书 CLI（需重开终端）"); fi
-  else err "飞书 CLI 安装失败（可能是 npm 权限）。截图发到群里。"; FAILED+=("飞书 CLI"); fi
+  else err "飞书 CLI 安装失败（可能是 npm 权限 / 缓存权限）。截图发到群里。"; FAILED+=("飞书 CLI"); fi
 }
 
 do_obsidian(){
