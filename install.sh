@@ -488,41 +488,49 @@ auth_phase(){
 
   if has_cmd claude; then
     step "4) Claude Code 登录（重点）"
-    say "Claude Code 登录是最容易卡住的一步。先问你三个问题，帮你选对路、少走弯路。"
+    say "Claude Code 登录是最容易卡住的一步。下面一次只问一个问题，按当前问题回答即可。"
     echo
-    say "${BOLD}问题 1：你有官方付费账号吗？${RST}（Claude Pro / Max；ChatGPT 账号用来登 Codex）"
+    say "${BOLD}问题 1：你有 Claude 官方付费账号吗？${RST}（Claude Pro / Max）"
     say "  ${DIM}为什么问：没有官方账号就没法走官方登录，只能用第三方中转。${RST}"
     say "    1 = 有        2 = 没有"
     printf "${CYN}输入 1 或 2：${RST} "; local q1; IFS= read -r q1 </dev/tty || q1="1"
     echo
-    say "${BOLD}问题 2：这个账号被封过、或你担心被封吗？${RST}"
-    say "  ${DIM}为什么问：账号被封过的话，再用官方登录很容易又被封；很多同学会改用中转更稳妥。${RST}"
-    say "    1 = 没事 / 不担心      2 = 被封过 / 担心"
-    printf "${CYN}输入 1 或 2：${RST} "; local q2; IFS= read -r q2 </dev/tty || q2="1"
-    echo
-    local suggest="官方账号登录"
-    if [ "$q1" = "2" ] || [ "$q2" = "2" ]; then suggest="第三方中转"; fi
-    say "  ${DIM}根据你的回答，建议你用：${RST}${BOLD}$suggest${RST}"
-    [ "$q1" = "2" ] && say "  ${DIM}（你没有官方账号，官方登录走不通，所以建议中转）${RST}"
-    [ "$q1" != "2" ] && [ "$q2" = "2" ] && say "  ${DIM}（账号被封过 / 担心被封，用中转不拿正式账号冒险）${RST}"
-    echo
-    say "${BOLD}问题 3：那这次你用哪种？${RST}"
-    say "    1 = 官方账号直接登录"
-    say "    2 = 用第三方中转（${BOLD}CC Switch 一键配置${RST}，不怕封）"
-    printf "${CYN}输入 1 或 2：${RST} "; local q3; IFS= read -r q3 </dev/tty || q3="1"
-    echo
-    if [ "$q3" = "2" ]; then
-      say "好的，用${BOLD}第三方中转${RST} —— ${BOLD}CC Switch 一键配置${RST}。下面帮你自动下载官方版本并安装："
+
+    if [ "$q1" = "2" ]; then
+      say "建议走${BOLD}第三方中转${RST}：你没有 Claude 官方账号，官方登录走不通。"
+      ask_continue "现在安装 CC Switch 中转管理器？" || { SKIPPED+=("Claude Code 登录 / CC Switch"); return; }
+      say "好的，下面帮你自动下载官方版本并安装："
       install_ccswitch
       say "  ${BOLD}配置（在打开的 CC Switch 里）${RST}：点右上角「${BOLD}新建${RST}」→ 填中转地址和密钥 → 选中 → 应用。"
       say "  ${DIM}中转地址和密钥自己去这两个靠谱的中转站注册、充值一些先试用（充一两百够用很久）：${RST}"
       say "    ${CYN}https://aigocode.com/invite/ATR5EXTD${RST}"
       say "    ${CYN}https://apikey.fun/register?aff=S46XYZ9AKRFM${RST}"
       say "  ${DIM}配好后 Claude Code / Codex / Hermes 都走这个中转。脚本不预置密钥（避免泄露和封号）。${RST}"
-    else
-      say "即将运行 ${DIM}claude${RST}，会打开浏览器走官方登录；登录后在里面输入 /exit 退出。"
-      ask_continue "现在登录 Claude Code 官方？" && { claude </dev/tty || warn "登录没完成，稍后可手动运行 claude"; }
+      return
     fi
+
+    say "${BOLD}问题 2：这个 Claude 官方账号被封过、或你担心被封吗？${RST}"
+    say "  ${DIM}为什么问：账号被封过的话，再用官方登录很容易又被封；改用中转更稳妥。${RST}"
+    say "    1 = 没事 / 不担心      2 = 被封过 / 担心"
+    printf "${CYN}输入 1 或 2：${RST} "; local q2; IFS= read -r q2 </dev/tty || q2="1"
+    echo
+
+    if [ "$q2" = "2" ]; then
+      say "建议走${BOLD}第三方中转${RST}：账号被封过 / 担心被封，不拿正式账号冒险。"
+      ask_continue "现在安装 CC Switch 中转管理器？" || { SKIPPED+=("Claude Code 登录 / CC Switch"); return; }
+      say "好的，下面帮你自动下载官方版本并安装："
+      install_ccswitch
+      say "  ${BOLD}配置（在打开的 CC Switch 里）${RST}：点右上角「${BOLD}新建${RST}」→ 填中转地址和密钥 → 选中 → 应用。"
+      say "  ${DIM}中转地址和密钥自己去这两个靠谱的中转站注册、充值一些先试用（充一两百够用很久）：${RST}"
+      say "    ${CYN}https://aigocode.com/invite/ATR5EXTD${RST}"
+      say "    ${CYN}https://apikey.fun/register?aff=S46XYZ9AKRFM${RST}"
+      say "  ${DIM}配好后 Claude Code / Codex / Hermes 都走这个中转。脚本不预置密钥（避免泄露和封号）。${RST}"
+      return
+    fi
+
+    say "建议走${BOLD}Claude 官方账号登录${RST}。"
+    say "即将运行 ${DIM}claude${RST}，会打开浏览器走官方登录；登录后在里面输入 /exit 退出。"
+    ask_continue "现在登录 Claude Code 官方？" && { claude </dev/tty || warn "登录没完成，稍后可手动运行 claude"; }
   fi
 }
 

@@ -549,41 +549,49 @@ function Auth-Phase {
   }
   if(Cmd-Usable 'claude'){
     Step "4) Claude Code 登录（重点）"
-    Say "Claude Code 登录是最容易卡住的一步。先问你三个问题，帮你选对路、少走弯路。"
+    Say "Claude Code 登录是最容易卡住的一步。下面一次只问一个问题，按当前问题回答即可。"
     Say ""
-    Say "问题 1：你有官方付费账号吗？（Claude Pro / Max；ChatGPT 账号用来登 Codex）"
+    Say "问题 1：你有 Claude 官方付费账号吗？（Claude Pro / Max）"
     Say "  为什么问：没有官方账号就没法走官方登录，只能用第三方中转。"
     Say "    1 = 有        2 = 没有"
     $q1 = Read-Host "输入 1 或 2"
     Say ""
-    Say "问题 2：这个账号被封过、或你担心被封吗？"
-    Say "  为什么问：账号被封过的话，再用官方登录很容易又被封；很多同学会改用中转更稳妥。"
-    Say "    1 = 没事 / 不担心      2 = 被封过 / 担心"
-    $q2 = Read-Host "输入 1 或 2"
-    Say ""
-    $suggest = "官方账号登录"
-    if($q1 -eq '2' -or $q2 -eq '2'){ $suggest = "第三方中转" }
-    Say "  根据你的回答，建议你用：$suggest"
-    if($q1 -eq '2'){ Say "  （你没有官方账号，官方登录走不通，所以建议中转）" }
-    elseif($q2 -eq '2'){ Say "  （账号被封过 / 担心被封，用中转不拿正式账号冒险）" }
-    Say ""
-    Say "问题 3：那这次你用哪种？"
-    Say "    1 = 官方账号直接登录"
-    Say "    2 = 用第三方中转（CC Switch 一键配置，不怕封）"
-    $q3 = Read-Host "输入 1 或 2"
-    Say ""
-    if($q3 -eq '2'){
-      Say "好的，用第三方中转 —— CC Switch 一键配置。下面帮你自动下载官方版本并安装："
+
+    if($q1 -eq '2'){
+      Say "建议走第三方中转：你没有 Claude 官方账号，官方登录走不通。"
+      if(-not (Ask "现在安装 CC Switch 中转管理器？")){ $script:SKIPPED+="Claude Code 登录 / CC Switch"; return }
+      Say "好的，下面帮你自动下载官方版本并安装："
       Install-CCSwitch
       Say "  配置（在打开的 CC Switch 里）：点右上角「新建」-> 填中转地址和密钥 -> 选中 -> 应用。"
       Say "  中转地址和密钥自己去这两个靠谱的中转站注册、充值一些先试用（充一两百够用很久）："
       Say "    https://aigocode.com/invite/ATR5EXTD"
       Say "    https://apikey.fun/register?aff=S46XYZ9AKRFM"
       Say "  配好后 Claude Code / Codex / Hermes 都走这个中转。脚本不预置密钥（避免泄露和封号）。"
-    } else {
-      Say "即将运行 claude，会打开浏览器走官方登录；登录后在里面输入 /exit 退出。"
-      if(Ask "现在登录 Claude Code 官方？"){ try { cmd /c "claude" } catch { Warn "登录没完成，稍后可手动运行 claude" } }
+      return
     }
+
+    Say "问题 2：这个 Claude 官方账号被封过、或你担心被封吗？"
+    Say "  为什么问：账号被封过的话，再用官方登录很容易又被封；改用中转更稳妥。"
+    Say "    1 = 没事 / 不担心      2 = 被封过 / 担心"
+    $q2 = Read-Host "输入 1 或 2"
+    Say ""
+
+    if($q2 -eq '2'){
+      Say "建议走第三方中转：账号被封过 / 担心被封，不拿正式账号冒险。"
+      if(-not (Ask "现在安装 CC Switch 中转管理器？")){ $script:SKIPPED+="Claude Code 登录 / CC Switch"; return }
+      Say "好的，下面帮你自动下载官方版本并安装："
+      Install-CCSwitch
+      Say "  配置（在打开的 CC Switch 里）：点右上角「新建」-> 填中转地址和密钥 -> 选中 -> 应用。"
+      Say "  中转地址和密钥自己去这两个靠谱的中转站注册、充值一些先试用（充一两百够用很久）："
+      Say "    https://aigocode.com/invite/ATR5EXTD"
+      Say "    https://apikey.fun/register?aff=S46XYZ9AKRFM"
+      Say "  配好后 Claude Code / Codex / Hermes 都走这个中转。脚本不预置密钥（避免泄露和封号）。"
+      return
+    }
+
+    Say "建议走 Claude 官方账号登录。"
+    Say "即将运行 claude，会打开浏览器走官方登录；登录后在里面输入 /exit 退出。"
+    if(Ask "现在登录 Claude Code 官方？"){ try { cmd /c "claude" } catch { Warn "登录没完成，稍后可手动运行 claude" } }
   }
 }
 
