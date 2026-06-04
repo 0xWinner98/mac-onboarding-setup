@@ -437,10 +437,14 @@ function Do-Hermes {
   Step "Hermes Agent —— 能成长的 AI 助手"
   if(Cmd-Usable 'hermes'){ Ok "已安装"; $script:SKIPPED+="Hermes"; return }
   if(-not (Ask "现在安装 Hermes？（会自动装 Git/Python/Node 等依赖，耗时几分钟）")){ $script:SKIPPED+="Hermes"; return }
-  Say "  正在装 Hermes：会下 uv / Python / Node 等依赖（连 astral.sh / GitHub 等国外源），正常首次 5-15 分钟、没进度条别慌。"
+  Say "  正在装 Hermes：只安装本体和环境，不进入 Hermes 配置向导；会下 uv / Python / Node 等依赖，正常首次 5-15 分钟、没进度条别慌。"
   Warn "卡在某一步（如 Installing managed uv）超过 10 分钟完全不动 = 网络/Cloudflare 拦了下载：按 Ctrl+C 中断，先跳过 Hermes（Claude Code/Codex 是主力、够用），换干净网络/IP 再单独装。"
   $ok=$true
-  try { Invoke-Expression (Invoke-RestMethod https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.ps1 -ErrorAction Stop) } catch { $ok=$false; Warn "安装过程报错：$_" }
+  try {
+    $installer = Invoke-RestMethod https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.ps1 -ErrorAction Stop
+    $installerBlock = [ScriptBlock]::Create("$installer")
+    & $installerBlock -SkipSetup
+  } catch { $ok=$false; Warn "安装过程报错：$_" }
   Refresh-Path
   Add-UserPathEntry (Hermes-BinDir) | Out-Null
   if(Cmd-Usable 'hermes'){ Ok "Hermes 安装成功"; $script:INSTALLED+="Hermes" }
@@ -530,8 +534,9 @@ function Auth-Phase {
   Say "每个工具会打开浏览器或问你几个问题，跟着走就行。脚本不碰你的任何密码。"
 
   if(Cmd-Usable 'codex'){
-    Step "1) 登录 Codex（用你的 ChatGPT 账号）"
-    if(Ask "现在登录 Codex？"){ try { cmd /c "codex login" } catch { Warn "登录没完成，稍后可手动运行 codex login" } }
+    Step "1) Codex OAuth（用你的 ChatGPT 账号）"
+    Say "脚本不自动打开 OAuth 登录。需要官方账号登录时，之后手动运行：codex login"
+    Say "  远程/无浏览器环境可用：codex login --device-auth"
   }
   if(Cmd-Usable 'lark-cli'){
     Step "2) 配置并授权 飞书 CLI"

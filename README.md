@@ -1,7 +1,7 @@
 ---
 created: 2026-06-02 17:01:09 +0800
 summary: 航海家 6/6 大课 AI 工具一键部署脚本说明 | 学员下载运行、排错、授权指引
-last_change: 2026-06-04 10:52:57 +0800 — 飞书 CLI 来源改为官方 npx install，包含本体和 Agent Skills
+last_change: 2026-06-04 13:12:36 +0800 — Hermes 改为只安装本体和环境，不自动进入配置向导
 ---
 
 # 航海家 · AI 工具一键部署助手
@@ -49,9 +49,9 @@ last_change: 2026-06-04 10:52:57 +0800 — 飞书 CLI 来源改为官方 npx ins
 
 脚本第二步会一个个带你登录。**脚本不碰你的任何密码**，全部由你在官方页面自己完成：
 
-- Codex → 用 ChatGPT 账号登录
+- Codex → 需要官方账号时，自己运行 `codex login` 授权
 - 飞书 CLI → 扫码 / 浏览器授权
-- Hermes → 跟着 `hermes setup` 向导走
+- Hermes → 脚本只安装本体和环境；中转 / provider 后面用 CC Switch 配，或自己再跑 Hermes 配置
 - Claude Code → **官方订阅**直接登录；**怕封号 / 没订阅 / 网络进不去**就选「中转」，脚本带你装 CC Switch，中转地址和密钥**自己去下面靠谱的中转站注册拿**（充一两百够用很久）：
   - https://aigocode.com/invite/ATR5EXTD
   - https://apikey.fun/register?aff=S46XYZ9AKRFM

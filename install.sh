@@ -331,13 +331,13 @@ do_hermes(){
     say "  ${DIM}更省事：直接装 Hermes 桌面 App（自带运行环境、不用 CLT），后面「图形界面」步骤会引导你装；想用命令行版就先把 Xcode 工具装好再重跑脚本。${RST}"
     SKIPPED+=("Hermes 命令行（缺 CLT → 改用桌面 App / 或装 CLT 重跑）"); return
   fi
-  say "将运行官方安装脚本（仅需 Git，会自动装 Python / Node 等依赖，耗时几分钟）："
-  say "  ${DIM}curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash${RST}"
+  say "将运行官方安装脚本（仅安装本体和环境，不进入 Hermes 配置向导）："
+  say "  ${DIM}curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash -s -- --skip-setup${RST}"
   ask_continue "现在安装 Hermes？" || { SKIPPED+=("Hermes"); return; }
   say "${DIM}正在装 Hermes：会下 uv / Python / Node 等依赖（连 astral.sh / GitHub / PyPI 等国外源），正常首次 5-15 分钟。${RST}"
   say "${DIM}中途看到「Trying tier: all」「Resolved N packages」「uv.lock sync failed」都正常，别关窗口。${RST}"
   say "${YLW}但卡在某一步（如 Installing managed uv）超过 10 分钟完全不动 = 网络/Cloudflare 拦了下载：按 Ctrl+C 中断，先跳过 Hermes（Claude Code/Codex 是主力、够用），换干净网络/IP 再单独装。${RST}"
-  if curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash; then
+  if curl -fsSL https://raw.githubusercontent.com/NousResearch/hermes-agent/main/scripts/install.sh | bash -s -- --skip-setup; then
     ensure_local_bin
     if hermes_ok; then ok "Hermes 安装成功：$(hermes_version)"; INSTALLED+=("Hermes")
     else err "Hermes 官方脚本跑完了，但 hermes --version 仍不能用。先跳过 Hermes，不影响 Claude Code / Codex 主流程。"; FAILED+=("Hermes（命令不可用）"); fi
@@ -468,9 +468,9 @@ auth_phase(){
   say "${DIM}脚本不碰你的任何密码，所有登录都是你在官方页面自己完成。${RST}"
 
   if has_cmd codex; then
-    step "1) 登录 Codex（用你的 ChatGPT 账号）"
-    say "即将运行 ${DIM}codex login${RST}，会打开浏览器。"
-    ask_continue "现在登录 Codex？" && { codex login </dev/tty || warn "登录没完成，稍后可手动运行 codex login"; }
+    step "1) Codex OAuth（用你的 ChatGPT 账号）"
+    say "脚本不自动打开 OAuth 登录。需要官方账号登录时，之后手动运行：${BOLD}codex login${RST}"
+    say "  ${DIM}远程/无浏览器环境可用：codex login --device-auth${RST}"
   fi
 
   if has_cmd lark-cli; then
