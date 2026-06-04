@@ -238,13 +238,21 @@ function Repair-PathForTool($display, $command, $dirs, $files){
   $found = Existing-CommandFile $dirs $files
   if(-not $found){ return $null }
   $dir = Split-Path -Parent $found
+  Say ""
+  Hr
+  Say "PATH 修复：$display"
   Warn "检测到 $display 本体已安装在：$dir"
   Warn "但当前 PowerShell 找不到「$command」命令，说明 PATH（命令查找目录）缺少这一项。"
   if(-not (Ask "按回车配置 PATH，让现在和新开的 PowerShell 都能找到 $command？")){ return $false }
   Add-UserPathEntry $dir | Out-Null
   Refresh-Path
-  if(Cmd-Usable $command){ Ok "$display 环境已补好：$command 可用了"; return $true }
+  if(Cmd-Usable $command){
+    Ok "$display 环境已补好：$command 可用了"
+    Say ""
+    return $true
+  }
   Warn "$display 的 PATH 已写入，但当前窗口仍没识别；关掉 PowerShell 重开后再试 $command --version。"
+  Say ""
   return $false
 }
 function Ensure-PathRepairs {

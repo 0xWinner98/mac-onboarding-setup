@@ -132,6 +132,9 @@ repair_path_for_tool(){
     return $?
   fi
   [ -n "$dir" ] && [ -e "$dir/$file" ] || return 1
+  echo
+  hr
+  say "${BOLD}PATH 修复：$display${RST}"
   warn "检测到 $display 本体已安装在：$dir"
   warn "但当前终端找不到 [$cmd_label] 命令，说明 PATH（命令查找目录）缺少这一项。"
   if ask_continue "按回车配置 PATH，让现在和新开的终端都能找到 [$cmd_label]"; then
@@ -139,11 +142,14 @@ repair_path_for_tool(){
     if has_cmd "$cmd"; then
       if [ "$cmd" != "hermes" ] || hermes_ok; then
         ok "$display 环境已补好：$cmd_label 可用了"
+        echo
         return 0
       fi
     fi
     warn "$display 的 PATH 已写入，但当前窗口仍没识别；关掉终端重开后再试 $cmd_label --version。"
+    echo
   fi
+  echo
   return 1
 }
 
